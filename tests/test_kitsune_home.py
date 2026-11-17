@@ -63,6 +63,30 @@ class TestSuiteIsolation:
             assert p.is_relative_to(_TEST_KITSUNE_HOME), f"{name} escapes the test home: {p}"
             assert not p.is_relative_to(_REAL_KITSUNE_HOME), f"{name} points at ~/.kitsune: {p}"
 
+    def test_only_temp_dotenv_files_are_loaded(self, tmp_path):
+        from tests.conftest import _dotenv_path_allowed
+
+        assert not _dotenv_path_allowed(None)  # load_dotenv() would find the repo .env
+        assert not _dotenv_path_allowed(Path.home() / ".env")
+        assert not _dotenv_path_allowed(Path(__file__).resolve().parent.parent / ".env")
+        assert _dotenv_path_allowed(tmp_path / ".env")
+        assert _dotenv_path_allowed(Path(os.environ["KITSUNE_HOME"]) / ".env")
+
+    def test_modules_bind_the_isolated_loader(self, tmp_path, monkeypatch):
+        import kitsune_mcp.credentials as c
+        import server
+        from tests.conftest import _isolated_load_dotenv
+
+        assert c.load_dotenv is _isolated_load_dotenv
+        assert server.load_dotenv is _isolated_load_dotenv
+
+        monkeypatch.delenv("KITSUNE_TEST_DOTENV_PROBE", raising=False)
+        env_file = tmp_path / ".env"
+        env_file.write_text("KITSUNE_TEST_DOTENV_PROBE=loaded\n")
+        assert c.load_dotenv(env_file) is True
+        assert os.environ["KITSUNE_TEST_DOTENV_PROBE"] == "loaded"
+        monkeypatch.delenv("KITSUNE_TEST_DOTENV_PROBE")
+
 
 class TestAllModulesHonorKitsuneHome:
     """Module-level path constants are bound at import time, so derivation is

@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import dotenv
 import httpx
 import pytest
 import respx
@@ -22,6 +23,33 @@ _TEST_KITSUNE_HOME = tempfile.mkdtemp(prefix="kitsune-test-home-")
 os.environ["KITSUNE_HOME"] = _TEST_KITSUNE_HOME
 atexit.register(shutil.rmtree, _TEST_KITSUNE_HOME, ignore_errors=True)
 _REAL_KITSUNE_HOME = Path.home() / ".kitsune"
+
+# Keep the developer's real keys out of the test process too. credentials.py
+# loads ~/.env and ./.env, and server.py calls load_dotenv() with no path
+# (which finds the repo's .env) — so on a dev machine the suite ran with real
+# API keys in os.environ, while CI ran without them. Only .env files under the
+# temp directory (the test KITSUNE_HOME, tmp_path) are loaded. This must be
+# patched before any test module imports kitsune_mcp or server, because both
+# bind load_dotenv at import. Subprocesses a test spawns are not covered; they
+# set their own HOME / KITSUNE_HOME / cwd.
+_TEMP_ROOT = Path(tempfile.gettempdir()).resolve()
+_REAL_LOAD_DOTENV = dotenv.load_dotenv
+
+
+def _dotenv_path_allowed(dotenv_path) -> bool:
+    """True only for an explicit .env path inside the temp directory."""
+    if dotenv_path is None:
+        return False
+    return Path(dotenv_path).resolve().is_relative_to(_TEMP_ROOT)
+
+
+def _isolated_load_dotenv(dotenv_path=None, *args, **kwargs):
+    if not _dotenv_path_allowed(dotenv_path):
+        return False
+    return _REAL_LOAD_DOTENV(dotenv_path, *args, **kwargs)
+
+
+dotenv.load_dotenv = _isolated_load_dotenv
 
 _REAL_WHICH = shutil.which
 

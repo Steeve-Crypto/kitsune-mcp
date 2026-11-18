@@ -4,7 +4,9 @@ All notable changes to this project are documented here.
 
 ---
 
-## [Unreleased]
+## [0.24.0] — 2026-11-18
+
+Smithery is gone. Smithery, now part of Arcade.dev, shut down its API, hosted servers and API keys on 2026-10-31, so Kitsune drops its Smithery integration (#127). Search and hosted servers keep working through the official registry, MCP Registry, Glama, npm, PyPI, GitHub and direct `https://` URLs. Breaking: the `skill()` tool and the `SMITHERY_API_KEY` setting are removed.
 
 ### Removed
 - **Smithery support.** Smithery, now part of Arcade.dev, shut down its API, Connect proxy, API keys and hosted `server.smithery.ai` / `*.run.tools` URLs on 2026-10-31 ([notice](https://smithery.ai/future)). Kitsune no longer searches the Smithery registry, routes calls through Smithery Connect, or reads `SMITHERY_API_KEY` (it is ignored if still set). `status()` and `onboard()` no longer list Smithery or ping it. `smithery.yaml` and the `SMITHERY_API_KEY` entries in `server.json` are gone.

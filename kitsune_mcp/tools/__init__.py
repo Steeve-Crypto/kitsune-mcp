@@ -4,7 +4,7 @@ Implementation is split into themed submodules:
     discovery   — search, inspect, compare, status
     exec        — call, run, fetch, test, bench
     shapeshift  — shapeshift, shiftback, craft, connect, release, prewarm
-    onboarding  — skill, key, auth, auto, setup
+    onboarding  — key, auth, auto, setup
     _state      — shared helpers and mock-patchable cross-cutting state
 
 For mock.patch in tests, prefer `kitsune_mcp.tools._state.X` so the patch
@@ -29,7 +29,6 @@ from kitsune_mcp.tools._state import (  # noqa: F401
     NpmRegistry,
     PersistentStdioTransport,
     PyPIRegistry,
-    SmitheryRegistry,
     WebSocketTransport,
     _compare_missing_creds,
     _do_shed,
@@ -49,7 +48,6 @@ from kitsune_mcp.tools._state import (  # noqa: F401
     _register_proxy_tools,
     _registry,
     _resolve_config,
-    _smithery_available,
     _synthetic_http_server,
     _to_env_var,
     _tool_count_hint,
@@ -58,7 +56,7 @@ from kitsune_mcp.tools._state import (  # noqa: F401
 )
 from kitsune_mcp.tools.discovery import compare, inspect, search, status  # noqa: F401
 from kitsune_mcp.tools.exec import bench, call, fetch, run, test  # noqa: F401
-from kitsune_mcp.tools.onboarding import auth, auto, key, onboard, setup, skill  # noqa: F401
+from kitsune_mcp.tools.onboarding import auth, auto, key, onboard, setup  # noqa: F401
 from kitsune_mcp.tools.shapeshift import (  # noqa: F401
     connect,
     craft,

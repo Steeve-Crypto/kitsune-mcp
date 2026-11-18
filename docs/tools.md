@@ -117,11 +117,10 @@ description, source and whether their credentials are ready.
 ```python
 search("web search")
 search("postgres", compare=True)  # side-by-side token-cost table
-search("vector db", registry="smithery")
+search("vector db", registry="official")
 ```
 
-`registry`: `all`, `official`, `mcpregistry`, `glama`, `npm`, `smithery`,
-`pypi`. A failing registry is reported inline; the others still return.
+`registry`: `all`, `official`, `mcpregistry`, `glama`, `npm`, `pypi`. A failing registry is reported inline; the others still return.
 
 ### `inspect` *full profile*
 
@@ -182,7 +181,7 @@ shapeshift()  # unmount and stop the process
 | `tools` | Mount only these tools |
 | `confirm` | Required for community sources (npm, PyPI, GitHub) |
 | `sandbox` | `None`: cage community sources in Docker when available. `True`: force the cage. `False`: opt out |
-| `source` | `auto`, `local`, `smithery` or `official` |
+| `source` | `auto`, `local` or `official` |
 | `server_args` | Extra arguments for the server process |
 | `keep` | With no `server_id` (unmount): keep the process warm in the pool instead of stopping and uninstalling it |
 
@@ -362,16 +361,6 @@ Gateway wizard. Moves the servers from your other MCP configs behind Kitsune.
 | `setup(project=True)` | Write `.claude/mcp.json` with only Kitsune, for this project |
 
 See [configuration](configuration.md#gateway-consolidate-always-on-servers).
-
-### `skill` *full profile*
-
-```python
-skill(qualified_name, forget=False)
-```
-
-Load a Smithery skill into context. `forget=True` removes it.
-
----
 
 ## Response size
 

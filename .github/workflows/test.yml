@@ -86,8 +86,6 @@ jobs:
             echo "IMPORT-HANG" >> hang.flag
             tail -30 import.log 2>/dev/null || true
           fi
-        env:
-          SMITHERY_API_KEY: ""
 
       # The wedge poisons process creation machine-wide: once pytest hangs, ANY
       # fork on the runner blocks uninterruptibly (this is why pgrep, sleep
@@ -119,7 +117,6 @@ jobs:
             < /dev/null > wrapper.log 2>&1 &
           echo "watcher + pytest launched detached; this step exits before any wedge can start"
         env:
-          SMITHERY_API_KEY: ""
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
 
@@ -193,4 +190,3 @@ jobs:
         run: pytest tests/test_docker_e2e.py -v --tb=short
         env:
           KITSUNE_E2E_DOCKER: "1"
-          SMITHERY_API_KEY: ""

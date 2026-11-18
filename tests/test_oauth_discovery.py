@@ -464,7 +464,7 @@ async def test_sdk_server_challenge_drives_login(monkeypatch):
     rs, rs_thread = _serve(mcp.streamable_http_app(), rs_port)
     asrv, as_thread = _serve(auth_server, as_port)
     try:
-        t = tp.HTTPSSETransport(rs_url, direct=True)
+        t = tp.HTTPSSETransport(rs_url)
         assert await t.execute("whoami", {}, {}) == "authorized"
         assert await t.execute("whoami", {}, {}) == "authorized"  # stored token, no new login
     finally:

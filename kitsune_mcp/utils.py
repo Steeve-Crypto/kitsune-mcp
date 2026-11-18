@@ -22,7 +22,7 @@ logging.getLogger("httpx").setLevel(_http_log_level)
 logging.getLogger("httpcore").setLevel(_http_log_level)
 
 # ---------------------------------------------------------------------------
-# Shared HTTP client — reused across registry lookups, skill fetches, URL fetch
+# Shared HTTP client — reused across registry lookups, URL fetch
 # ---------------------------------------------------------------------------
 
 _http_client: httpx.AsyncClient | None = None

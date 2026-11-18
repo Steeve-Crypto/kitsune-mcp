@@ -23,7 +23,7 @@ Do not clone or build the repository. `uvx` fetches the published package from P
 }
 ```
 
-No environment variables are required. `SMITHERY_API_KEY` is optional and only adds Smithery to registry search.
+No environment variables are required.
 
 ## 3. Verify
 

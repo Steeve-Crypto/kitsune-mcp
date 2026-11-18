@@ -91,7 +91,7 @@ kitsune_mcp/
   tools/               # the MCP tools (discovery, exec, shapeshift, onboarding)
     _state.py          # tool-name sets for the lean and full profiles
   transport.py         # stdio, HTTP/SSE, WebSocket, persistent and Docker transports
-  registry.py          # registry clients (official, MCP Registry, Glama, npm, PyPI, Smithery)
+  registry.py          # registry clients (official, MCP Registry, Glama, npm, PyPI, GitHub)
   shapeshift.py        # mounting proxied tools, resources and prompts
   credentials.py       # .env handling and credential checks
   guard.py, pins.py    # action guard and version pins

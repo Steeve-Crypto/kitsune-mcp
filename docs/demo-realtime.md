@@ -4,7 +4,7 @@ Three acts, each showing something native Tool Search **cannot** do, because eac
 needs code executed at runtime, not just tool schemas deferred:
 
 1. [**Developing an MCP server live**](#act-1) — edit → reload → test, no restart
-2. [**Executing a long-tail server**](#act-2) — Glama / Smithery, nothing pre-installed
+2. [**Executing a long-tail server**](#act-2) — Glama / hosted HTTP, nothing pre-installed
 3. [**The guardrails holding**](#act-3) — running unknown code, with honest limits
 
 Every block is a real tool call. Outputs are representative — abbreviated for the
@@ -87,7 +87,7 @@ call("summarize", arguments={"url": "https://example.com"})
 
 ## Act 2
 
-### Executing a long-tail server — Glama & Smithery (≈ 40 s)
+### Executing a long-tail server — Glama & hosted HTTP (≈ 40 s)
 
 **The pain we're killing:** you need a capability that lives in one of 130,000+
 servers you were never going to add to your config. Native deferral can't help —
@@ -121,12 +121,10 @@ call("extract_text", arguments={"path": "q3-report.pdf"})
 shapeshift()  # done — process released, tools dropped
 ```
 
-**[CUT]** — now a **hosted** server via Smithery (HTTP, no local install; needs a
-free `SMITHERY_API_KEY`):
+**[CUT]** — now a **hosted** server at its own URL (HTTP, no local install):
 
 ```python
-search("web search", registry="smithery")
-shapeshift("exa")  # medium trust — no confirm needed
+shapeshift("https://mcp.exa.ai/mcp")
 call("web_search_exa", arguments={"query": "MCP registry growth 2026"})
 shapeshift()
 ```

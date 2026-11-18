@@ -6,7 +6,7 @@ Warm pool re-attach within a session: **0 ms**.
 
 | Transport | Cold start | Warm |
 |---|---|---|
-| HTTP / Smithery | 0–1.4 s | 0.0 s |
+| Hosted HTTP | 0–1.4 s | 0.0 s |
 | Local `npx` | 1.7–6.3 s | 0.0 s |
 | Local `uvx` | 1.0–5.2 s | 0.0 s |
 

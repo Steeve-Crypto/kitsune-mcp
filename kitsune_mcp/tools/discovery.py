@@ -74,12 +74,8 @@ async def _compare_probe(srv, allow_low_trust: bool) -> dict:
         row["status"] = "registry"
         return row
 
-    # 1. Smithery short-circuit — no key, no probe possible.
-    if srv.source == "smithery" and not _state._smithery_available():
-        row["status"] = "needs SMITHERY_API_KEY"
-        row["action"] = 'auth("SMITHERY_API_KEY", "...") then compare(...)'
-    # 2. Any other HTTP transport — let _get_transport pick direct-OAuth vs Smithery.
-    elif srv.transport == "http":
+    # 1. Hosted HTTP server — probe its URL directly (OAuth on 401).
+    if srv.transport == "http":
         try:
             transport = _state._get_transport(srv.id, srv)
             tools = await asyncio.wait_for(
@@ -89,19 +85,12 @@ async def _compare_probe(srv, allow_low_trust: bool) -> dict:
             if tools:
                 row["tools"] = len(tools)
                 row["tokens"] = _estimate_tokens(tools)
-                if srv.url and ".run.tools" in srv.url:
-                    row["status"] = "live (smithery)"
-                else:
-                    row["status"] = "live (oauth)"
+                row["status"] = "live (oauth)"
                 return row
             # Empty tools list without exception — endpoint reachable but auth
             # or config issue we can't diagnose from here.
-            if srv.source == "smithery":
-                row["status"] = "reachable — no tools returned (check account)"
-                row["action"] = f'inspect("{srv.id}")  # diagnose smithery setup'
-            else:
-                row["status"] = "HTTP-only (no tools via probe)"
-                row["action"] = f'inspect("{srv.id}")  # diagnose'
+            row["status"] = "HTTP-only (no tools via probe)"
+            row["action"] = f'inspect("{srv.id}")  # diagnose'
         except Exception as e:
             last_err = _state._humanize_probe_error(str(e))
             row["status"] = f"unreachable: {last_err}"
@@ -191,16 +180,20 @@ async def search(
 
     search('web search')                # find candidates
     search('postgres', compare=True)    # side-by-side token-cost table
-    search('vector db', registry='smithery')
+    search('vector db', registry='official')
 
-    registry: all|official|mcpregistry|glama|npm|smithery|pypi
+    registry: all|official|mcpregistry|glama|npm|pypi
     """
     if compare:
         return await _run_compare(query, limit)
 
     if registry == "smithery":
-        reg = _scoped_registry(_state.SmitheryRegistry)
-    elif registry == "npm":
+        return (
+            "Smithery shut down its registry API on 2026-10-31. "
+            "Search the other registries: registry='all' (default), 'official', "
+            "'mcpregistry', 'glama', 'npm' or 'pypi'."
+        )
+    if registry == "npm":
         reg = _scoped_registry(_state.NpmRegistry)
     elif registry == "pypi":
         reg = _scoped_registry(_state.PyPIRegistry)
@@ -410,7 +403,7 @@ async def _run_compare(query: str, limit: int = 6, probe: bool = False) -> str:
         lines.append(f"{tokens_s:>9}  {tools_s:>5}  {src:<11}  {status:<24}  {r['id']}")
 
     # Pick winners (ready = measured live / cached).
-    _live_statuses = {"registry", "live", "live (oauth)", "live (smithery)"}
+    _live_statuses = {"registry", "live", "live (oauth)"}
     ready = [r for r in rows if r["tokens"] is not None and r["status"] in _live_statuses]
     if ready:
         cheapest = ready[0]
@@ -452,8 +445,6 @@ async def compare(query: str, limit: int = 6, probe: bool = False) -> str:
 @mcp.tool()
 async def status() -> str:
     """Show Kitsune runtime state: providers, current form, connections, token stats."""
-    from kitsune_mcp.credentials import _smithery_available
-
     explored = session["explored"]
     skills_data = session["skills"]
     grown = session["grown"]
@@ -462,43 +453,10 @@ async def status() -> str:
     shapeshifted = session["shapeshift_tools"]
 
     from kitsune_mcp import __version__
-    from kitsune_mcp.credentials import _registry_headers
-    from kitsune_mcp.registry import REGISTRY_BASE
-    from kitsune_mcp.utils import _get_http_client
 
     lines = [f"KITSUNE MCP  v{__version__}", ""]
 
-    # PROVIDERS — Smithery key is validated with a live ping so users see
-    # "verified" vs "set but INVALID" rather than just presence/absence.
-    smithery_ok = _smithery_available()
-    if smithery_ok:
-        try:
-            _r = await asyncio.wait_for(
-                _get_http_client().get(
-                    f"{REGISTRY_BASE}/servers",
-                    params={"pageSize": 1},
-                    headers=_registry_headers(),
-                ),
-                timeout=3.0,
-            )
-            if _r.status_code == 200:
-                smithery_label = "(SMITHERY_API_KEY set — verified ✓)"
-                smithery_icon = "✓"
-            elif _r.status_code in (401, 403):
-                smithery_label = "(SMITHERY_API_KEY set but INVALID — get a new key at smithery.ai/account/api-keys)"
-                smithery_icon = "⚠️"
-            else:
-                smithery_label = f"(SMITHERY_API_KEY set — unverified, HTTP {_r.status_code})"
-                smithery_icon = "✓"
-        except Exception:
-            smithery_label = "(SMITHERY_API_KEY set — could not verify)"
-            smithery_icon = "✓"
-    else:
-        smithery_label = "(no key — auth('SMITHERY_API_KEY', 'sm-...') to unlock 3000+ servers)"
-        smithery_icon = "🔑"
-
     lines.append("PROVIDERS")
-    lines.append(f"  {smithery_icon}  Smithery  {smithery_label}")
     lines.append("  ✓  Official MCP Registry  (no key required)")
     lines.append("  ✓  npm + PyPI  (no key required)")
     lines.append("  ✓  Glama  (no key required)")
@@ -553,7 +511,7 @@ async def status() -> str:
             '  1. shapeshift("mcp-server-time")',
             '  2. call("get_current_time", {"timezone": "UTC"})',
             "  3. shapeshift()",
-            '  More: search("what you need") | auth("SMITHERY_API_KEY", "sm-...") for 3000+ servers',
+            '  More: search("what you need")',
             "",
         ]
 

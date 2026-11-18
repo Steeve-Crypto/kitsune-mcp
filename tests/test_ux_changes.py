@@ -43,31 +43,6 @@ class TestCredentialsReady:
         assert "free" in result
         assert "✅" in result
 
-    def test_smithery_without_key_says_needs_smithery_api_key(self):
-        # v0.11.0 fix for issue #8: Smithery-hosted servers always need
-        # SMITHERY_API_KEY regardless of whether per-server creds are declared.
-        # Old "no creds declared (may use OAuth)" silently led users into walls.
-        from unittest.mock import patch
-
-        from kitsune_mcp.credentials import _credentials_ready
-
-        # Patch _smithery_available so the test isn't affected by a real .env
-        # file that may have a key set.
-        with patch("kitsune_mcp.credentials._smithery_available", return_value=False):
-            result = _credentials_ready({}, "smithery")
-        assert "SMITHERY_API_KEY" in result
-        assert "🔑" in result
-
-    def test_smithery_with_key_set_shows_env_set(self):
-        from unittest.mock import patch
-
-        from kitsune_mcp.credentials import _credentials_ready
-
-        with patch("kitsune_mcp.credentials._smithery_available", return_value=True):
-            result = _credentials_ready({}, "smithery")
-        assert "env set" in result
-        assert "✓" in result
-
     def test_no_credentials_community_source_warns(self):
         # npm/pypi/github without declared creds — undeclared ≠ free.
         from kitsune_mcp.credentials import _credentials_ready
@@ -81,7 +56,7 @@ class TestCredentialsReady:
         from kitsune_mcp.credentials import _credentials_ready
 
         result = _credentials_ready({}, "glama")
-        # mcpregistry/glama are TRUST_MEDIUM but not Smithery-tagged → may need OAuth
+        # mcpregistry/glama are TRUST_MEDIUM → may need OAuth
         assert "🔑" in result
 
     def test_credential_present_in_env_returns_set(self):
@@ -424,7 +399,7 @@ class TestShapeshiftCredBugFix:
             id="needs-key",
             name="Needs Key",
             description="Requires an API key",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             url="https://example.com",
             install_cmd=[],
@@ -461,7 +436,7 @@ class TestShapeshiftCredBugFix:
             id="free-server",
             name="Free Server",
             description="No credentials needed",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             url="https://example.com",
             install_cmd=[],
@@ -480,7 +455,6 @@ class TestShapeshiftCredBugFix:
             patch("kitsune_mcp.tools._state._registry") as mock_reg,
             patch("kitsune_mcp.tools._state._do_shed", return_value=[]) as mock_shed,
             patch("kitsune_mcp.tools._state._resolve_config", return_value=({}, {})),
-            patch("kitsune_mcp.tools._state._smithery_available", return_value=True),
             patch("kitsune_mcp.tools._state._get_transport") as mock_transport_fn,
             patch("kitsune_mcp.tools._state._register_proxy_tools", return_value=(["my_tool"], [])),
             patch("kitsune_mcp.tools._state._register_proxy_resources", return_value=[]),
@@ -527,7 +501,7 @@ class TestShapeshiftLeanHint:
             id="heavy-server",
             name="Heavy Server",
             description="Has many tools",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             url="https://example.com",
             install_cmd=[],
@@ -547,7 +521,6 @@ class TestShapeshiftLeanHint:
             patch("kitsune_mcp.tools._state._registry") as mock_reg,
             patch("kitsune_mcp.tools._state._do_shed", return_value=[]),
             patch("kitsune_mcp.tools._state._resolve_config", return_value=({}, {})),
-            patch("kitsune_mcp.tools._state._smithery_available", return_value=True),
             patch("kitsune_mcp.tools._state._get_transport") as mock_transport_fn,
             patch(
                 "kitsune_mcp.tools._state._register_proxy_tools",
@@ -620,7 +593,7 @@ class TestShapeshiftCallExample:
             id="multi-server",
             name="Multi",
             description="Two tools with different args",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             url="https://example.com",
             install_cmd=[],
@@ -640,7 +613,6 @@ class TestShapeshiftCallExample:
             patch("kitsune_mcp.tools._state._registry") as mock_reg,
             patch("kitsune_mcp.tools._state._do_shed", return_value=[]),
             patch("kitsune_mcp.tools._state._resolve_config", return_value=({}, {})),
-            patch("kitsune_mcp.tools._state._smithery_available", return_value=True),
             patch("kitsune_mcp.tools._state._get_transport") as mock_transport_fn,
             patch("kitsune_mcp.tools._state._register_proxy_tools", return_value=(registered, [])),
             patch("kitsune_mcp.tools._state._register_proxy_resources", return_value=[]),
@@ -669,7 +641,7 @@ class TestShapeshiftCallExample:
 
 
 class TestThinSchemaRefetch:
-    """Smithery's registry omits `required` — _commit_shapeshift must refetch the
+    """Some registries omit `required` — _commit_shapeshift must refetch the
     live schema so both the proxy and the call hint carry required params (#44)."""
 
     def test_helper_detects_thin_schema(self):
@@ -699,7 +671,7 @@ class TestThinSchemaRefetch:
     def _make_thin_srv(self):
         from kitsune_mcp.registry import ServerInfo
 
-        # Registry listing: properties but NO `required` (the Smithery shape)
+        # Registry listing: properties but NO `required` (a thin registry shape)
         thin_tools = [
             {
                 "name": "resolve-library-id",
@@ -714,7 +686,7 @@ class TestThinSchemaRefetch:
             id="thin-server",
             name="Thin",
             description="Registry omits required",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             url="https://example.com",
             install_cmd=[],
@@ -745,7 +717,6 @@ class TestThinSchemaRefetch:
             patch("kitsune_mcp.tools._state._registry") as mock_reg,
             patch("kitsune_mcp.tools._state._do_shed", return_value=[]),
             patch("kitsune_mcp.tools._state._resolve_config", return_value=({}, {})),
-            patch("kitsune_mcp.tools._state._smithery_available", return_value=True),
             patch("kitsune_mcp.tools._state._get_transport") as mock_transport_fn,
             patch(
                 "kitsune_mcp.tools._state._register_proxy_tools",
@@ -1060,7 +1031,7 @@ class TestSearchRegistryWarning:
         from kitsune_mcp.tools import search
 
         mock_servers = [
-            ServerInfo("brave", "Brave", "Web search", "smithery", "http"),
+            ServerInfo("brave", "Brave", "Web search", "mcpregistry", "http"),
         ]
 
         mock_registry = MagicMock()
@@ -1079,7 +1050,7 @@ class TestSearchRegistryWarning:
         from kitsune_mcp.tools import search
 
         mock_servers = [
-            ServerInfo("brave", "Brave", "Web search", "smithery", "http"),
+            ServerInfo("brave", "Brave", "Web search", "mcpregistry", "http"),
         ]
 
         mock_registry = MagicMock()
@@ -1133,8 +1104,8 @@ class TestSearchWorksNowSignal:
 
         # official + stdio + no creds = 0.8 → high
         assert _works_now_label(ServerInfo("a", "A", "d", "official", "stdio")) == "high"
-        # official + http + no creds = 0.7 → high; smithery http no creds = 0.5 → mid
-        assert _works_now_label(ServerInfo("b", "B", "d", "smithery", "http")) == "mid"
+        # official + http + no creds = 0.7 → high; npm http no creds = 0.45 → mid
+        assert _works_now_label(ServerInfo("b", "B", "d", "npm", "http")) == "mid"
         # npm + http + missing cred = 0.05 → low
         low = ServerInfo(
             "c", "C", "d", "npm", "http", credentials={"KITSUNE_TEST_MISSING_API_KEY": "x"}
@@ -1608,26 +1579,6 @@ class TestCompareTool:
         # The cheapest-of-two ready candidates should be recommended.
         assert "Cheapest ready" in result
         assert "foo/a" in result.split("Cheapest ready")[1]
-
-    async def test_smithery_without_key_shows_actionable_status(self):
-        from kitsune_mcp.registry import ServerInfo
-        from kitsune_mcp.tools import compare
-
-        srv = ServerInfo(
-            id="notion",
-            name="Notion",
-            description="x",
-            source="smithery",
-            transport="http",
-            url="https://x.run.tools",
-        )
-        with (
-            patch("kitsune_mcp.tools._state._registry") as mock_reg,
-            patch("kitsune_mcp.tools._state._smithery_available", return_value=False),
-        ):
-            mock_reg.search = AsyncMock(return_value=[srv])
-            result = await compare("any")
-        assert "needs SMITHERY_API_KEY" in result
 
     async def test_description_tool_count_yields_estimate_when_probe_fails(self):
         from kitsune_mcp.registry import ServerInfo

@@ -70,7 +70,7 @@ class TestHTTPSSETransport:
         import httpx
         import respx
 
-        endpoint = "https://api.smithery.ai/connect/ns/kitsune-test-org-test-server/mcp"
+        endpoint = "https://srv.example/test-server/mcp"
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -108,7 +108,7 @@ class TestHTTPSSETransport:
 
     async def test_timeout_returns_timeout_message(self):
         """HTTPSSETransport returns timeout message on asyncio.TimeoutError."""
-        endpoint = "https://api.smithery.ai/connect/ns/kitsune-slow-server/mcp"
+        endpoint = "https://srv.example/slow-server/mcp"
         transport = HTTPSSETransport("slow-server")
 
         async def _timeout(coro, timeout=None):
@@ -415,13 +415,13 @@ class TestValidateInstallCmd:
 
 
 class TestHTTPSSETransportDirectOAuth:
-    """direct=True: no token until the server asks; its 401 challenge drives the login."""
+    """No token until the server asks; its 401 challenge drives the login."""
 
     async def test_connect_endpoint_sends_stored_token(self):
         from kitsune_mcp import oauth
 
         url = "https://mcp.notion.com/mcp"
-        transport = HTTPSSETransport(url, direct=True)
+        transport = HTTPSSETransport(url)
         with patch.object(oauth, "stored_token", AsyncMock(return_value="tok-oauth-1")):
             endpoint, token = await transport._connect_endpoint({})
         assert endpoint == url
@@ -430,14 +430,14 @@ class TestHTTPSSETransportDirectOAuth:
     async def test_connect_endpoint_without_login_is_anonymous(self):
         from kitsune_mcp import oauth
 
-        transport = HTTPSSETransport("https://public.example/mcp", direct=True)
+        transport = HTTPSSETransport("https://public.example/mcp")
         with patch.object(oauth, "stored_token", AsyncMock(return_value="")):
             assert await transport._connect_endpoint({}) == ("https://public.example/mcp", "")
 
     async def test_connect_endpoint_store_error_falls_back_to_anonymous(self):
         from kitsune_mcp import oauth
 
-        transport = HTTPSSETransport("https://x.example/mcp", direct=True)
+        transport = HTTPSSETransport("https://x.example/mcp")
         with patch.object(oauth, "stored_token", AsyncMock(side_effect=OSError("disk"))):
             assert await transport._connect_endpoint({}) == ("https://x.example/mcp", "")
 
@@ -448,7 +448,7 @@ class TestHTTPSSETransportDirectOAuth:
         from kitsune_mcp import oauth
 
         url = "https://public.example/mcp"
-        transport = HTTPSSETransport(url, direct=True)
+        transport = HTTPSSETransport(url)
         init = {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18"}}
         result = {
             "jsonrpc": "2.0",
@@ -475,7 +475,7 @@ class TestHTTPSSETransportDirectOAuth:
         from kitsune_mcp import oauth
 
         url = "https://mcp.example/mcp"
-        transport = HTTPSSETransport(url, direct=True)
+        transport = HTTPSSETransport(url)
         challenge = (
             'Bearer realm="OAuth", resource_metadata='
             '"https://mcp.example/.well-known/oauth-protected-resource/mcp", scope="read"'
@@ -524,7 +524,7 @@ class TestHTTPSSETransportDirectOAuth:
         from kitsune_mcp import oauth
 
         url = "https://keyed.example/mcp"
-        transport = HTTPSSETransport(url, direct=True)
+        transport = HTTPSSETransport(url)
         with (
             patch.object(oauth, "stored_token", AsyncMock(return_value="")),
             patch.object(
@@ -545,7 +545,6 @@ class TestGetTransportURLEscapeHatch:
 
         t = _get_transport("https://mcp.notion.com/mcp", None)
         assert isinstance(t, HTTPSSETransport)
-        assert t.direct is True
         assert t.deployment_url == "https://mcp.notion.com/mcp"
 
     def test_bare_http_url_returns_direct_httpsse(self):
@@ -553,25 +552,33 @@ class TestGetTransportURLEscapeHatch:
 
         t = _get_transport("http://127.0.0.1:9000/mcp", None)
         assert isinstance(t, HTTPSSETransport)
-        assert t.direct is True
+        assert t.deployment_url == "http://127.0.0.1:9000/mcp"
 
-    def test_registry_http_run_tools_stays_smithery(self):
-        """A registry-declared HTTP server on *.run.tools is still Smithery-mediated."""
+    def test_unknown_id_without_registry_entry_is_unresolved(self):
+        """No registry hit and not a URL: no guessed host, a clear not-found message."""
         from kitsune_mcp.tools import _get_transport
+        from kitsune_mcp.transport import UnresolvedTransport
 
-        srv = MagicMock(transport="http", url="https://brave.run.tools", id="brave")
-        t = _get_transport("brave", srv)
-        assert isinstance(t, HTTPSSETransport)
-        assert t.direct is False
+        t = _get_transport("nobody/knows-this", None)
+        assert isinstance(t, UnresolvedTransport)
+
+    async def test_unresolved_transport_explains_and_lists_nothing(self):
+        from kitsune_mcp.transport import UnresolvedTransport
+
+        t = UnresolvedTransport("nobody/knows-this")
+        assert "not found in any registry" in await t.execute("x", {}, {})
+        out = await t.execute_raw("x", {}, {})
+        assert out["isError"] is True
+        assert await t.list_tools() == []
 
     def test_registry_http_direct_url_becomes_direct(self):
-        """A registry-declared HTTP server NOT on run.tools uses direct OAuth."""
+        """A registry-declared HTTP server is reached at its own URL."""
         from kitsune_mcp.tools import _get_transport
 
         srv = MagicMock(transport="http", url="https://mcp.notion.com/mcp", id="notion-hosted")
         t = _get_transport("notion-hosted", srv)
         assert isinstance(t, HTTPSSETransport)
-        assert t.direct is True
+        assert t.deployment_url == "https://mcp.notion.com/mcp"
 
 
 class TestStdioBufferLimit:

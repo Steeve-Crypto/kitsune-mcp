@@ -95,8 +95,8 @@ async def call(
 
     # When call() targets the currently shapeshifted form, prefer the pooled transport
     # that shapeshift() created — this respects source='local' and other overrides that
-    # _get_transport() can't see (it re-resolves from registry and picks HTTP for
-    # Smithery servers regardless of what shapeshift set up).
+    # _get_transport() can't see (it re-resolves from the registry regardless of
+    # what shapeshift set up).
     pool_key = session.get("current_form_pool_key")
     sandbox_note = ""
     if local_key is not None:

@@ -30,13 +30,13 @@ KITSUNE_TRUST=community     # waive confirm gate (status warns)
 KITSUNE_REPIN=1             # adopt newer pinned version
 ```
 
-## Smithery
+## Smithery (removed)
 
-```json
-{ "env": { "SMITHERY_API_KEY": "your-key" } }
-```
-
-Free key: [smithery.ai/account/api-keys](https://smithery.ai/account/api-keys). Without it, npm / PyPI / official / GitHub still work.
+Smithery shut down its API, Connect proxy and hosted `server.smithery.ai` /
+`run.tools` URLs on 2026-10-31, so Kitsune no longer uses it. `SMITHERY_API_KEY`
+is ignored. Search covers the official registry, MCP Registry, Glama, npm, PyPI
+and GitHub without any key; to use a hosted server, pass its own `https://` MCP
+URL to `shapeshift()` or `call()`.
 
 ## GATEWAY: consolidate always-on servers
 

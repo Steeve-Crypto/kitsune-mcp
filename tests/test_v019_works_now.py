@@ -48,23 +48,22 @@ class TestWorksNowScore:
         score_no_creds = self._fn()(_srv(source="official", transport="stdio", credentials={}))
         assert score_missing < score_no_creds
 
-    def test_smithery_http_scores_lower_than_official_stdio(self):
-        smithery = self._fn()(_srv(source="smithery", transport="http", credentials={}))
+    def test_community_http_scores_lower_than_official_stdio(self):
+        community = self._fn()(_srv(source="glama", transport="http", credentials={}))
         official = self._fn()(_srv(source="official", transport="stdio", credentials={}))
-        assert smithery < official
+        assert community < official
 
     def test_source_tier_ordering(self):
         fn = self._fn()
         official = fn(_srv(source="official", credentials={}))
         mcpreg = fn(_srv(source="mcpregistry", credentials={}))
-        smithery = fn(_srv(source="smithery", credentials={}))
         npm = fn(_srv(source="npm", credentials={}))
-        assert official > mcpreg >= smithery > npm
+        assert official > mcpreg > npm
 
     def test_stdio_beats_http_same_source(self):
         fn = self._fn()
-        stdio = fn(_srv(source="smithery", transport="stdio", credentials={}))
-        http = fn(_srv(source="smithery", transport="http", credentials={}))
+        stdio = fn(_srv(source="glama", transport="stdio", credentials={}))
+        http = fn(_srv(source="glama", transport="http", credentials={}))
         assert stdio > http
 
     def test_high_token_cost_penalized(self):
@@ -107,10 +106,10 @@ class TestCandidateSortUsesWorksNow:
 
         assert callable(_works_now_score)
 
-    def test_official_stdio_sorts_before_smithery_http(self):
+    def test_official_stdio_sorts_before_community_http(self):
         from kitsune_mcp.registry import _works_now_score
 
         official = _srv(source="official", transport="stdio", credentials={})
-        smithery_http = _srv(source="smithery", transport="http", credentials={})
-        ranked = sorted([smithery_http, official], key=_works_now_score, reverse=True)
+        community_http = _srv(source="glama", transport="http", credentials={})
+        ranked = sorted([community_http, official], key=_works_now_score, reverse=True)
         assert ranked[0].source == "official"

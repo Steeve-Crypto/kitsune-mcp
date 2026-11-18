@@ -134,7 +134,7 @@ Full live walkthrough: [`docs/demo-realtime.md`](docs/demo-realtime.md).
   </picture>
 </div>
 
-`search()` covers the [official servers repo](https://github.com/modelcontextprotocol/servers), the [MCP Registry](https://registry.modelcontextprotocol.io), [Glama](https://glama.ai/mcp/servers), npm, PyPI, GitHub (`github:owner/repo`) and [Smithery](https://smithery.ai) (hosted servers, free API key).
+`search()` covers the [official servers repo](https://github.com/modelcontextprotocol/servers), the [MCP Registry](https://registry.modelcontextprotocol.io), [Glama](https://glama.ai/mcp/servers), npm, PyPI, GitHub (`github:owner/repo`). Hosted servers are reached at their own `https://` URL.
 
 ## Tools
 
@@ -167,7 +167,7 @@ Don't run it unattended with production admin, billing or security credentials. 
 
 ## More
 
-- [Configuration](docs/configuration.md): env and `.env` lookup, tool profiles, sandbox and trust settings, Smithery, GATEWAY, mount patterns
+- [Configuration](docs/configuration.md): env and `.env` lookup, tool profiles, sandbox and trust settings, GATEWAY, mount patterns
 - [Performance](docs/performance.md): cold/warm latency and token cost compared with always-on servers
 - [Transports](docs/transports.md) · [Compatibility](docs/compatibility.md) · [Agent patterns](docs/agent-patterns.md) · [Worked scenarios](examples/scenarios/)
 

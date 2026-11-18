@@ -86,7 +86,7 @@ class TestInferArgsFromTask:
         assert self._fn()(schema, "convert this") == {}
 
     def test_fills_optional_search_param_when_no_required(self):
-        # Many Smithery servers declare all params optional (required=[]) but
+        # Many servers declare all params optional (required=[]) but
         # still fail without a query. Rule 0b: fill optional SEARCH_PARAM_NAMES
         # params so calls succeed instead of sending empty args.
         schema = {
@@ -191,7 +191,7 @@ class TestAutoFillsArgs:
             id="provider-a",
             name="provider-a",
             description="",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             install_cmd=[],
             credentials={},
@@ -233,7 +233,7 @@ class TestAutoFillsArgs:
             async def fake_execute(tool, args, config):
                 call_log.append(server_id)
                 if server_id == "provider-a":
-                    return "Auth failed: SMITHERY_API_KEY invalid"
+                    return "Auth failed: API key invalid"
                 return '{"results": ["ok"]}'
 
             return fake_execute
@@ -253,7 +253,7 @@ class TestAutoFillsArgs:
             async def _exec(tool, args, config):
                 call_log.append(server_id)
                 if server_id == "provider-a":
-                    return "Auth failed: SMITHERY_API_KEY invalid"
+                    return "Auth failed: API key invalid"
                 return '{"results": ["ok"]}'
 
             t.execute = _exec
@@ -276,7 +276,7 @@ class TestAutoFillsArgs:
         from unittest.mock import MagicMock
 
         results_per_id = {
-            "provider-a": "Auth failed for SMITHERY_API_KEY",
+            "provider-a": "Auth failed for EXA_API_KEY",
             "provider-b": '{"results": ["fallback success"]}',
         }
 
@@ -312,7 +312,7 @@ class TestAutoFillsArgs:
 
             result = await auto(task="web search", arguments={"query": "x"})
 
-        # provider-b (npm/stdio, no creds) is now ranked above provider-a (smithery/http)
+        # provider-b (npm/stdio, no creds) is now ranked above provider-a (mcpregistry/http)
         # so it's tried first and succeeds — no auth failure path needed.
         assert "provider-b" in call_log
         assert "fallback success" in result
@@ -328,7 +328,7 @@ class TestAutoFillsArgs:
             id="pinned",
             name="pinned",
             description="",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             install_cmd=[],
             credentials={},

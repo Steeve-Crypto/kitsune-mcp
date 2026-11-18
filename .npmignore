@@ -13,7 +13,6 @@ dist/
 *.egg-info/
 pyproject.toml
 Makefile
-smithery.yaml
 *.png
 *.svg
 *.excalidraw

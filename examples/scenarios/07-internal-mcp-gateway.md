@@ -7,7 +7,7 @@
 
 This is the enterprise pitch: Kitsune as a single entry point to a fleet of
 **internal, company-private** MCP servers, mounted only when needed. Same
-model as the Glama / Smithery story, but the catalog is your own.
+model as the Glama / MCP Registry story, but the catalog is your own.
 
 DNA traits:
 - **Surgical** — engineers use a couple of tools at a time across the fleet
@@ -75,7 +75,7 @@ Three engineers, three internal tools, **none of them load the other 9 servers**
 ## What this scenario demonstrates
 
 1. **The "registry of registries" pattern.** Your internal MCP fleet becomes
-   discoverable via `search()` exactly like the public Glama / Smithery
+   discoverable via `search()` exactly like the public Glama / MCP Registry
    catalogs. Engineers don't memorize URLs or server IDs.
 2. **Onboarding flattens.** A new engineer's setup is one MCP entry, not
    ten. Adding a new internal server doesn't require every engineer to edit
@@ -95,7 +95,7 @@ engineer-client (Cursor, Claude, ...)
                 │       │
                 │       └─→ catalog of {acme-billing-mcp, acme-deploy-mcp, ...}
                 │
-                └─ (also serves public Smithery / Glama / npm / pypi via the
+                └─ (also serves public MCP Registry / Glama / npm / pypi via the
                    normal registry stack)
 ```
 

@@ -15,16 +15,7 @@
       "version": "0.23.0",
       "transport": {
         "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "name": "SMITHERY_API_KEY",
-          "description": "Optional. Adds Smithery to registry search; the other registries need no key. Get one at smithery.ai/account/api-keys",
-          "isRequired": false,
-          "isSecret": true,
-          "format": "string"
-        }
-      ]
+      }
     },
     {
       "registryType": "pypi",
@@ -32,16 +23,7 @@
       "version": "0.23.0",
       "transport": {
         "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "name": "SMITHERY_API_KEY",
-          "description": "Optional. Adds Smithery to registry search; the other registries need no key. Get one at smithery.ai/account/api-keys",
-          "isRequired": false,
-          "isSecret": true,
-          "format": "string"
-        }
-      ]
+      }
     }
   ]
 }

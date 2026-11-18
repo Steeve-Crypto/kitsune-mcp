@@ -272,10 +272,10 @@ class TestShapeshiftAutoResolve:
         from kitsune_mcp.tools import shapeshift
         from kitsune_mcp.tools._state import _registry
 
-        # Smithery-required-but-missing-key path
-        with patch("kitsune_mcp.tools._state._smithery_available", return_value=False):
-            result = await shapeshift("anything", self._make_ctx(), source="smithery")
+        # Retired source='smithery' path
+        result = await shapeshift("anything", self._make_ctx(), source="smithery")
         assert result.startswith("❌")
+        assert "2026-10-31" in result
 
         # Server-not-found path (no candidates either)
         with (

@@ -18,7 +18,7 @@ import sys
 
 from dotenv import load_dotenv
 
-# Must run before kitsune_mcp.credentials reads SMITHERY_API_KEY at module level.
+# Must run before kitsune_mcp.credentials is imported.
 # Load order: project-local .env first (lower priority), then $KITSUNE_HOME/.env
 # (higher priority — wins regardless of CWD so daemon launches work correctly).
 from kitsune_mcp.paths import kitsune_home  # noqa: E402
@@ -30,15 +30,12 @@ from kitsune_mcp.app import mcp  # noqa: E402, F401
 from kitsune_mcp.constants import *  # noqa: E402, F401, F403
 from kitsune_mcp.credentials import (  # noqa: E402, F401
     ENV_PATH,
-    SMITHERY_API_KEY,
     _credentials_guide,
     _credentials_inspect_block,
     _dotenv_revision,
-    _registry_headers,
     _reload_dotenv,
     _resolve_config,
     _save_to_env,
-    _smithery_available,
     _to_env_var,
 )
 from kitsune_mcp.gateway import (  # noqa: E402, F401
@@ -66,7 +63,6 @@ from kitsune_mcp.probe import (  # noqa: E402, F401
 from kitsune_mcp.registry import (  # noqa: E402, F401
     _CACHE_TTL_SEARCH,
     _CACHE_TTL_SERVER,
-    REGISTRY_BASE,
     AbsorbedRegistry,
     BaseRegistry,
     GitHubRegistry,
@@ -76,10 +72,8 @@ from kitsune_mcp.registry import (  # noqa: E402, F401
     NpmRegistry,
     PyPIRegistry,
     ServerInfo,
-    SmitheryRegistry,
     _dedup_key,
     _detect_github_install_cmd,
-    _extract_credentials,
     _registry,
     _relevance_score,
     _works_now_score,
@@ -120,7 +114,6 @@ from kitsune_mcp.tools import (  # noqa: E402, F401
     setup,
     shapeshift,
     shiftback,
-    skill,
     status,
     test,
 )

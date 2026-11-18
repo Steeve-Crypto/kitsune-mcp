@@ -30,7 +30,7 @@ class TestSimpleSearch:
                 id="brave-search",
                 name="Brave Search",
                 description="Privacy-focused web search.",
-                source="smithery",
+                source="mcpregistry",
                 transport="http",
                 url="",
                 install_cmd=[],
@@ -275,49 +275,22 @@ class TestAutoBuiltinGuard:
 
 
 # ---------------------------------------------------------------------------
-# Fix E: status() Smithery key liveness
+# Fix E: status() providers (Smithery liveness ping removed — shut down 2026-10-31)
 # ---------------------------------------------------------------------------
 
 
-class TestStatusSmitheryLiveness:
+class TestStatusProviders:
     @pytest.mark.asyncio
-    async def test_valid_key_shows_verified(self, respx_mock, monkeypatch):
-        import httpx
-
-        import kitsune_mcp.credentials as creds
-
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", "valid-key")
-        monkeypatch.setenv("SMITHERY_API_KEY", "valid-key")
-        respx_mock.get("https://registry.smithery.ai/servers").mock(
-            return_value=httpx.Response(200, json={"servers": []})
-        )
+    async def test_status_lists_no_smithery_provider(self):
+        """Smithery shut down on 2026-10-31; status() no longer pings or lists it."""
         from kitsune_mcp.tools.discovery import status
 
         result = await status()
-        assert "verified" in result
-
-    @pytest.mark.asyncio
-    async def test_invalid_key_shows_invalid(self, respx_mock, monkeypatch):
-        import httpx
-
-        import kitsune_mcp.credentials as creds
-
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", "bad-key")
-        monkeypatch.setenv("SMITHERY_API_KEY", "bad-key")
-        respx_mock.get("https://registry.smithery.ai/servers").mock(
-            return_value=httpx.Response(401, text="Unauthorized")
-        )
-        from kitsune_mcp.tools.discovery import status
-
-        result = await status()
-        assert "INVALID" in result
+        assert "Smithery" not in result
+        assert "SMITHERY_API_KEY" not in result
 
     @pytest.mark.asyncio
     async def test_no_key_shows_onboard_hint(self, monkeypatch):
-        import kitsune_mcp.credentials as creds
-
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", None)
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
         from kitsune_mcp.tools.discovery import status
 
         result = await status()
@@ -420,3 +393,13 @@ class TestBuildInferenceHint:
         assert hint is not None
         assert "text" in hint
         assert "target_language" in hint
+
+
+class TestSmitheryRetired:
+    @pytest.mark.asyncio
+    async def test_search_registry_smithery_explains_shutdown(self):
+        from kitsune_mcp.tools.discovery import search
+
+        result = await search("anything", registry="smithery")
+        assert "2026-10-31" in result
+        assert "registry='all'" in result

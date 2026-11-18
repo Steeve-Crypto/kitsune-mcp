@@ -79,7 +79,7 @@ def server(request):
 
 
 def _direct(url: str):
-    t = HTTPSSETransport(url, direct=True)
+    t = HTTPSSETransport(url)
     return t, patch.object(t, "_connect_endpoint", AsyncMock(return_value=(url, "tok")))
 
 
@@ -260,11 +260,11 @@ async def test_websocket_server_round_trip():
 
 @pytest.mark.parametrize("server", ["sse", "legacy"], indirect=True)
 async def test_public_server_needs_no_login(server, tmp_path, monkeypatch):
-    """direct=True, nothing patched: no stored login, so requests go out without a token."""
+    """Nothing patched: no stored login, so requests go out without a token."""
     from kitsune_mcp import oauth
 
     monkeypatch.setattr(oauth, "_KITSUNE_DIR", tmp_path / "oauth")
-    t = HTTPSSETransport(server, direct=True)
+    t = HTTPSSETransport(server)
     try:
         assert await t.execute("add", {"a": 20, "b": 22}, {}) == "sum=42"
     finally:

@@ -1,9 +1,7 @@
 """Targeted tests for previously uncovered transport.py paths.
 
-Covers: _SmitheryAuth namespace/token caching, _ensure_smithery_connection
-(incl. 409 recreate), pure URL/conn-id helpers, HTTPSSETransport.list_tools,
-HTTP execute error paths (init error, empty response, auth-failure credentials
-guide), stdio error paths, persistent-transport reconnect branches
+Covers: HTTPSSETransport.list_tools, HTTP execute error paths (init error,
+empty response, OAuth failure), stdio error paths, persistent-transport reconnect branches
 (broken pipe mid-write, death while waiting, .env-revision respawn),
 prompts/list + prompts/get, pool atexit cleanup, and _ping on a dead entry.
 """
@@ -27,14 +25,10 @@ from kitsune_mcp.transport import (
     PersistentStdioTransport,
     StdioTransport,
     WebSocketTransport,
-    _build_mcp_url,
-    _ensure_smithery_connection,
     _kill_all_pool_processes,
     _ping,
     _PoolEntry,
     _process_pool,
-    _smithery_auth,
-    _smithery_conn_id,
 )
 
 from .conftest import _script, make_mock_process, make_stdout_with_responses
@@ -42,212 +36,18 @@ from .conftest import _script, make_mock_process, make_stdout_with_responses
 
 @pytest.fixture(autouse=True)
 def _clean_state(monkeypatch):
-    """Isolate Smithery auth cache, process pool, and evict debounce per test."""
-    _smithery_auth.reset()
+    """Isolate the process pool and evict debounce per test."""
     _process_pool.clear()
     monkeypatch.setattr(tp, "_last_evict_at", 0.0)
     yield
-    _smithery_auth.reset()
     _process_pool.clear()
-
-
-# ---------------------------------------------------------------------------
-# Pure helpers
-# ---------------------------------------------------------------------------
-
-
-class TestSmitheryConnId:
-    def test_sanitizes_and_prefixes(self):
-        assert _smithery_conn_id("Test-Org/My Server") == "kitsune-test-org-my-server"
-
-    def test_truncates_to_64_chars(self):
-        cid = _smithery_conn_id("x" * 100)
-        assert len(cid) == 64
-        assert cid.startswith("kitsune-")
-
-
-class TestBuildMcpUrl:
-    def test_no_config_returns_url_unchanged(self):
-        assert _build_mcp_url("https://x.example/mcp", {}) == "https://x.example/mcp"
-
-    def test_none_values_are_dropped(self):
-        assert _build_mcp_url("https://x.example", {"a": None}) == "https://x.example"
-
-    def test_appends_query_string(self):
-        assert _build_mcp_url("https://x.example", {"k": "v"}) == "https://x.example?k=v"
-
-    def test_uses_ampersand_when_query_present(self):
-        assert _build_mcp_url("https://x.example?a=1", {"k": "v"}) == "https://x.example?a=1&k=v"
-
-
-# ---------------------------------------------------------------------------
-# _SmitheryAuth
-# ---------------------------------------------------------------------------
-
-
-class TestSmitheryAuthNamespace:
-    async def test_no_api_key_returns_none(self, monkeypatch):
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        monkeypatch.setattr(tp, "SMITHERY_API_KEY", "")
-        assert await _smithery_auth.get_namespace() is None
-
-    async def test_fetches_first_namespace_and_caches(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            route = respx.get("https://api.smithery.ai/namespaces").mock(
-                return_value=httpx.Response(200, json={"namespaces": [{"name": "myns"}]})
-            )
-            assert await _smithery_auth.get_namespace() == "myns"
-            # second call served from cache — no extra HTTP call
-            assert await _smithery_auth.get_namespace() == "myns"
-            assert route.call_count == 1
-
-    async def test_http_error_returns_none(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            respx.get("https://api.smithery.ai/namespaces").mock(return_value=httpx.Response(500))
-            assert await _smithery_auth.get_namespace() is None
-
-    async def test_empty_namespace_list_returns_none(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            respx.get("https://api.smithery.ai/namespaces").mock(
-                return_value=httpx.Response(200, json={"namespaces": []})
-            )
-            assert await _smithery_auth.get_namespace() is None
-
-
-class TestSmitheryAuthToken:
-    async def test_no_api_key_returns_empty(self, monkeypatch):
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        monkeypatch.setattr(tp, "SMITHERY_API_KEY", "")
-        assert await _smithery_auth.get_token() == ""
-
-    async def test_fetches_token_and_caches(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            route = respx.post("https://api.smithery.ai/tokens").mock(
-                return_value=httpx.Response(
-                    200,
-                    json={"token": "svc-tok", "expiresAt": "2099-01-01T00:00:00Z"},
-                )
-            )
-            assert await _smithery_auth.get_token() == "svc-tok"
-            assert await _smithery_auth.get_token() == "svc-tok"
-            assert route.call_count == 1
-
-    async def test_http_error_returns_empty(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            respx.post("https://api.smithery.ai/tokens").mock(return_value=httpx.Response(403))
-            assert await _smithery_auth.get_token() == ""
-
-    def test_reset_clears_all_state(self):
-        _smithery_auth.namespace = "ns"
-        _smithery_auth.service_token = "tok"
-        _smithery_auth.token_expires = time.monotonic() + 1000
-        _smithery_auth.connections["c"] = "u"
-        _smithery_auth.reset()
-        assert _smithery_auth.namespace is None
-        assert _smithery_auth.service_token == ""
-        assert _smithery_auth.token_expires == 0.0
-        assert _smithery_auth.connections == {}
-
-
-# ---------------------------------------------------------------------------
-# _ensure_smithery_connection
-# ---------------------------------------------------------------------------
-
-
-class TestEnsureSmitheryConnection:
-    URL = "https://api.smithery.ai/connect/ns/kitsune-x"
-
-    async def test_put_success_records_connection(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            respx.put(self.URL).mock(return_value=httpx.Response(200, json={}))
-            ok = await _ensure_smithery_connection("ns", "kitsune-x", "https://srv/mcp")
-        assert ok is True
-        assert _smithery_auth.connections["kitsune-x"] == "https://srv/mcp"
-
-    async def test_cached_connection_skips_http(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        _smithery_auth.connections["kitsune-x"] = "https://srv/mcp"
-        with respx.mock:  # no routes registered — any HTTP call would error
-            ok = await _ensure_smithery_connection("ns", "kitsune-x", "https://srv/mcp")
-        assert ok is True
-
-    async def test_409_deletes_and_recreates(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            put_route = respx.put(self.URL).mock(
-                side_effect=[httpx.Response(409), httpx.Response(200, json={})]
-            )
-            delete_route = respx.delete(self.URL).mock(return_value=httpx.Response(204))
-            ok = await _ensure_smithery_connection("ns", "kitsune-x", "https://srv/mcp")
-        assert ok is True
-        assert put_route.call_count == 2
-        assert delete_route.call_count == 1
-
-    async def test_http_failure_returns_false(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        with respx.mock:
-            respx.put(self.URL).mock(return_value=httpx.Response(500))
-            ok = await _ensure_smithery_connection("ns", "kitsune-x", "https://srv/mcp")
-        assert ok is False
-
-
-# ---------------------------------------------------------------------------
-# HTTPSSETransport._connect_endpoint (Smithery-mediated path)
-# ---------------------------------------------------------------------------
-
-
-class TestConnectEndpointSmithery:
-    def _transport(self):
-        return HTTPSSETransport("org/server", deployment_url="https://srv.example/mcp")
-
-    async def test_no_namespace_returns_none_and_failure_message(self):
-        t = self._transport()
-        with patch.object(tp, "_smithery_namespace", AsyncMock(return_value=None)):
-            assert await t._connect_endpoint({}) is None
-            result = await t.execute("tool", {}, {})
-        assert "Smithery Connect" in result
-        assert "SMITHERY_API_KEY" in result
-
-    async def test_no_token_returns_none(self):
-        t = self._transport()
-        with (
-            patch.object(tp, "_smithery_namespace", AsyncMock(return_value="ns")),
-            patch.object(tp, "_smithery_service_token", AsyncMock(return_value="")),
-        ):
-            assert await t._connect_endpoint({}) is None
-
-    async def test_connection_failure_returns_none(self):
-        t = self._transport()
-        with (
-            patch.object(tp, "_smithery_namespace", AsyncMock(return_value="ns")),
-            patch.object(tp, "_smithery_service_token", AsyncMock(return_value="tok")),
-            patch.object(tp, "_ensure_smithery_connection", AsyncMock(return_value=False)),
-        ):
-            assert await t._connect_endpoint({}) is None
-
-    async def test_success_returns_endpoint_and_token(self):
-        t = self._transport()
-        with (
-            patch.object(tp, "_smithery_namespace", AsyncMock(return_value="ns")),
-            patch.object(tp, "_smithery_service_token", AsyncMock(return_value="tok")),
-            patch.object(tp, "_ensure_smithery_connection", AsyncMock(return_value=True)),
-        ):
-            endpoint, token = await t._connect_endpoint({"k": "v"})
-        assert endpoint == "https://api.smithery.ai/connect/ns/kitsune-org-server/mcp"
-        assert token == "tok"
 
 
 # ---------------------------------------------------------------------------
 # HTTPSSETransport.execute error paths
 # ---------------------------------------------------------------------------
 
-ENDPOINT = "https://api.smithery.ai/connect/ns/kitsune-org-server/mcp"
+ENDPOINT = "https://srv.example/mcp"
 
 
 def _sse(payload: dict, session_id: str | None = None) -> httpx.Response:
@@ -302,36 +102,17 @@ class TestHTTPExecuteErrorPaths:
         assert "Error from org/server/tool" in result
         assert "boom" in result
 
-    async def test_401_with_missing_credentials_returns_guide(self):
+    async def test_401_failed_login_is_reported(self):
         t, patcher = _patched_transport()
-        srv = MagicMock()
-        srv.credentials = [{"key": "apiKey", "description": "Your API key"}]
-        registry = MagicMock()
-        registry.get_server = AsyncMock(return_value=srv)
         with (
             patcher,
             respx.mock,
-            patch.object(tp, "SmitheryRegistry", MagicMock(return_value=registry)),
-            patch.object(tp, "_resolve_config", MagicMock(return_value=({}, ["apiKey"]))),
-            patch.object(tp, "_credentials_guide", MagicMock(return_value="NEEDS apiKey")) as guide,
+            patch.object(tp.oauth, "authenticate", AsyncMock(side_effect=RuntimeError("denied"))),
         ):
             respx.post(ENDPOINT).mock(return_value=httpx.Response(401))
             result = await t.execute("tool", {}, {})
-        assert result == "NEEDS apiKey"
-        guide.assert_called_once()
-
-    async def test_401_without_server_info_returns_auth_failed(self):
-        t, patcher = _patched_transport()
-        registry = MagicMock()
-        registry.get_server = AsyncMock(return_value=None)
-        with (
-            patcher,
-            respx.mock,
-            patch.object(tp, "SmitheryRegistry", MagicMock(return_value=registry)),
-        ):
-            respx.post(ENDPOINT).mock(return_value=httpx.Response(401))
-            result = await t.execute("tool", {}, {})
-        assert "Auth failed for org/server" in result
+        assert "OAuth failed for org/server" in result
+        assert "denied" in result
 
 
 # ---------------------------------------------------------------------------
@@ -366,15 +147,9 @@ class TestHTTPListTools:
             )
             assert await t.list_tools() == []
 
-    async def test_401_smithery_mode_returns_empty(self):
-        t, patcher = _patched_transport()
-        with patcher, respx.mock:
-            respx.post(ENDPOINT).mock(return_value=httpx.Response(401))
-            assert await t.list_tools() == []
-
-    async def test_401_direct_mode_retries_with_fresh_token(self):
+    async def test_401_retries_with_fresh_token(self):
         url = "https://direct.example/mcp"
-        t = HTTPSSETransport(url, direct=True)
+        t = HTTPSSETransport(url)
         init_ok = {"jsonrpc": "2.0", "id": 1, "result": {}}
         tools = {"jsonrpc": "2.0", "id": 2, "result": {"tools": [{"name": "fresh"}]}}
         challenge = 'Bearer resource_metadata="https://direct.example/.well-known/x"'
@@ -399,9 +174,9 @@ class TestHTTPListTools:
         auth.assert_awaited_once_with(url, challenge, rejected="stale")
         assert route.calls[1].request.headers["Authorization"] == "Bearer fresh-tok"
 
-    async def test_401_direct_mode_failed_retry_returns_empty(self):
+    async def test_401_failed_retry_returns_empty(self):
         url = "https://direct.example/mcp"
-        t = HTTPSSETransport(url, direct=True)
+        t = HTTPSSETransport(url)
         with (
             patch.object(t, "_connect_endpoint", AsyncMock(return_value=(url, "stale"))),
             patch.object(tp.oauth, "authenticate", AsyncMock(side_effect=RuntimeError("no auth"))),
@@ -418,7 +193,7 @@ class TestHTTPListTools:
 
     async def test_direct_connect_never_fails_before_the_request(self):
         """No stored login is not an error: the request goes out without a token."""
-        t = HTTPSSETransport("https://direct.example/mcp", direct=True)
+        t = HTTPSSETransport("https://direct.example/mcp")
         with patch.object(tp.oauth, "stored_token", AsyncMock(return_value="")):
             assert await t._connect_endpoint({}) == ("https://direct.example/mcp", "")
 
@@ -581,12 +356,10 @@ class TestHTTPSessionReuse:
 
     async def test_401_on_cached_session_drops_it_and_reports_auth(self):
         t, patcher = _patched_transport()
-        registry = MagicMock()
-        registry.get_server = AsyncMock(return_value=None)
         with (
             patcher,
             respx.mock,
-            patch.object(tp, "SmitheryRegistry", MagicMock(return_value=registry)),
+            patch.object(tp.oauth, "authenticate", AsyncMock(side_effect=RuntimeError("no"))),
         ):
             respx.post(ENDPOINT).mock(
                 side_effect=_script(
@@ -600,7 +373,7 @@ class TestHTTPSessionReuse:
             )
             await t.execute("tool", {}, {})
             result = await t.execute("tool", {}, {})
-        assert "Auth failed" in result
+        assert "OAuth failed" in result
         assert tp._http_sessions == {}
 
     async def test_stateless_server_keeps_its_handshake(self):

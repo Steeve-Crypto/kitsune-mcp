@@ -56,7 +56,7 @@ Mounting the full `aws-mcp` server permanently solves accuracy but at a cost:
 ```python
 # 1. Locate the right server (1 call, ~500 tokens of context).
 search("aws iam")
-# → aws-mcp | AWS API surface via boto3 | smithery/stdio | ✓ creds set
+# → aws-mcp | AWS API surface via boto3 | mcpregistry/stdio | ✓ creds set
 # → ... 3 more results
 
 # 2. Surgical mount — only the four tools we need.

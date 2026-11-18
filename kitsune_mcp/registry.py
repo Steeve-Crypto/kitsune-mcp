@@ -15,12 +15,10 @@ from kitsune_mcp.constants import (
     TIMEOUT_FETCH_URL,
     TIMEOUT_REGISTRY_TASK,
 )
-from kitsune_mcp.credentials import _registry_headers, _resolve_config, _smithery_available
-from kitsune_mcp.utils import _estimate_tokens, _get_http_client
+from kitsune_mcp.credentials import _resolve_config
+from kitsune_mcp.utils import _get_http_client
 
 _T = TypeVar("_T")
-
-REGISTRY_BASE = "https://registry.smithery.ai"
 
 
 class TTLCache(Generic[_T]):  # noqa: UP046
@@ -92,7 +90,7 @@ def _simple_search(servers: list["ServerInfo"], query: str, limit: int) -> list[
     Previously used full-string substring matching, which returned zero results
     for any NL query longer than a single word (e.g. "what time is it in Tokyo"
     never appeared in any server name, so official/McpRegistry returned nothing
-    and auto() fell through to Smithery-only results). Word-by-word matching
+    and auto() fell through to full-text-search results only). Word-by-word matching
     means any query word appearing in name/id/description counts as a hit.
     Words under 3 characters are skipped to avoid false positives from stop-words.
     """
@@ -132,7 +130,7 @@ class ServerInfo:
     id: str
     name: str
     description: str
-    source: str  # "official" | "mcpregistry" | "glama" | "smithery" | "npm" | "pypi" | "github" | "absorbed" | "direct" | "local"
+    source: str  # "official" | "mcpregistry" | "glama" | "npm" | "pypi" | "github" | "absorbed" | "direct" | "local"
     transport: str  # "http" | "stdio" | "websocket"
     url: str = ""
     install_cmd: list = field(default_factory=list)
@@ -147,91 +145,6 @@ class BaseRegistry(ABC):
 
     @abstractmethod
     async def get_server(self, id: str): ...
-
-
-def _extract_credentials(server_dict: dict) -> dict:
-    credentials = {}
-    for conn in server_dict.get("connections", []):
-        for k, val in conn.get("configSchema", {}).get("properties", {}).items():
-            credentials[k] = val.get("description", "")
-    return credentials
-
-
-class SmitheryRegistry(BaseRegistry):
-    async def search(self, query: str, limit: int) -> list:
-        if not _smithery_available():
-            return []
-        try:
-            r = await _get_http_client().get(
-                f"{REGISTRY_BASE}/servers",
-                params={"q": f"{query} is:verified", "pageSize": limit},
-                headers=_registry_headers(),
-                timeout=TIMEOUT_FETCH_URL,
-            )
-            r.raise_for_status()
-            data = r.json()
-        except Exception:
-            return []
-
-        results = []
-        for s in data.get("servers", []):
-            qname = s.get("qualifiedName", "")
-            if not qname:
-                continue
-            credentials = _extract_credentials(s)
-            remote = s.get("remote", False)
-            deployment_url = s.get("deploymentUrl") or (
-                f"https://server.smithery.ai/{qname}" if remote else ""
-            )
-            results.append(
-                ServerInfo(
-                    id=qname,
-                    name=s.get("displayName") or qname,
-                    description=(s.get("description") or "").strip()[:MAX_EXPLORE_DESC],
-                    source="smithery",
-                    transport="http" if remote else "stdio",
-                    url=deployment_url,
-                    install_cmd=[],
-                    credentials=credentials,
-                    tools=[],
-                    token_cost=0,
-                )
-            )
-        return results
-
-    async def get_server(self, id: str):
-        if not _smithery_available():
-            return None
-        try:
-            r = await _get_http_client().get(
-                f"{REGISTRY_BASE}/servers/{id}",
-                headers=_registry_headers(),
-                timeout=TIMEOUT_FETCH_URL,
-            )
-            r.raise_for_status()
-            s = r.json()
-        except Exception:
-            return None
-
-        credentials = _extract_credentials(s)
-        tools = s.get("tools") or []
-        remote = s.get("remote", False)
-        qname = s.get("qualifiedName", id)
-        deployment_url = s.get("deploymentUrl") or (
-            f"https://server.smithery.ai/{qname}" if remote else ""
-        )
-        return ServerInfo(
-            id=qname,
-            name=s.get("displayName") or qname,
-            description=(s.get("description") or "").strip(),
-            source="smithery",
-            transport="http" if remote else "stdio",
-            url=deployment_url,
-            install_cmd=[],
-            credentials=credentials,
-            tools=tools,
-            token_cost=_estimate_tokens(tools),
-        )
 
 
 class NpmRegistry(BaseRegistry):
@@ -488,9 +401,23 @@ _CACHE_TTL_SEARCH = 60.0  # 1 minute — search results can shift
 # 6 parallel HTTP requests every time.
 _NOT_FOUND = object()
 
+# Hosts that shut down for good. Smithery's hosted servers (server.smithery.ai,
+# *.run.tools) stopped on 2026-10-31, but registries still list hundreds of them
+# (e.g. ai.smithery/* in the MCP Registry). Offering them only leads to 404s.
+_RETIRED_HOSTS = ("server.smithery.ai",)
+_RETIRED_HOST_SUFFIXES = (".run.tools",)
+
+
+def _on_retired_host(srv: "ServerInfo") -> bool:
+    """True for a hosted HTTP entry whose URL points at a shut-down host."""
+    if srv.transport != "http" or not srv.url:
+        return False
+    host = (urlparse(srv.url).hostname or "").lower()
+    return host in _RETIRED_HOSTS or host.endswith(_RETIRED_HOST_SUFFIXES)
+
 
 class MultiRegistry(BaseRegistry):
-    """Fan out to all registries, dedup by name, Official → GitHub → Smithery → npm priority."""
+    """Fan out to all registries, dedup by name, Official → GitHub → npm priority."""
 
     def __init__(self):
         from kitsune_mcp.official_registry import OfficialMCPRegistry
@@ -499,7 +426,6 @@ class MultiRegistry(BaseRegistry):
             OfficialMCPRegistry(),
             McpRegistryIO(),
             GitHubRegistry(),
-            SmitheryRegistry(),
             GlamaRegistry(),
             NpmRegistry(),
             AbsorbedRegistry(),
@@ -552,6 +478,8 @@ class MultiRegistry(BaseRegistry):
                 self.last_registry_errors[name] = type(batch).__name__
                 continue
             for srv in batch:
+                if _on_retired_host(srv):
+                    continue
                 k = _dedup_key(srv.name)
                 if k and k not in seen:
                     seen.add(k)
@@ -581,17 +509,16 @@ class MultiRegistry(BaseRegistry):
             for name, r in zip(self._reg_names, results, strict=False)
             if isinstance(r, BaseException)
         }
-        valid = [r for r in results if r and not isinstance(r, BaseException)]
-        # Source preference filtering — applied before the smithery-key filter
+        valid = [
+            r for r in results if r and not isinstance(r, BaseException) and not _on_retired_host(r)
+        ]
+        # Source preference filtering
         if source_preference:
             preferred = [r for r in valid if r.source == source_preference]
             valid = preferred if preferred else valid
-        # Skip Smithery results when no API key is configured.
-        smithery_key_ok = _smithery_available()
-        filtered = [r for r in valid if not (r.source == "smithery" and not smithery_key_ok)]
-        candidates = filtered or valid  # fall back to unfiltered if everything was smithery
+        candidates = valid
         # Sort: cached tools first (usable immediately), then by trust tier within each group.
-        # A Smithery entry with 6 tools beats an mcpregistry entry with none.
+        # An entry with known tools beats one with none.
         # If an official/high-trust source has tools, it wins over everything.
         candidates.sort(key=lambda r: (0 if r.tools else 1, _SOURCE_TIER.get(r.source, 99)))
         result = candidates[0] if candidates else None
@@ -603,7 +530,6 @@ _SOURCE_TIER: dict[str, int] = {
     "absorbed": 0,  # the user's own config — never outranked by a registry
     "official": 0,
     "mcpregistry": 1,
-    "smithery": 2,
     "glama": 3,
     "npm": 4,
     "github": 5,
@@ -665,7 +591,6 @@ _WORKS_NOW_TIER: dict[str, float] = {
     "official": 0.3,
     "mcpregistry": 0.2,
     "glama": 0.2,
-    "smithery": 0.1,
     "npm": 0.05,
     "pypi": 0.05,
 }

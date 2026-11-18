@@ -1,135 +1,15 @@
-"""Tests for SmitheryRegistry and NpmRegistry."""
+"""Tests for the registry clients (npm, PyPI, official, Glama, GitHub, multi)."""
 
 import os
 import sys
+from unittest.mock import AsyncMock
 
 import httpx
 import respx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from server import NpmRegistry, SmitheryRegistry
-
-# ---------------------------------------------------------------------------
-# SmitheryRegistry tests
-# ---------------------------------------------------------------------------
-
-
-class TestSmitheryRegistryNoKey:
-    async def test_search_without_api_key_returns_empty(self, monkeypatch):
-        import kitsune_mcp.credentials as creds
-
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", "")
-        reg = SmitheryRegistry()
-        results = await reg.search("anything", 5)
-        assert results == []
-
-    async def test_get_server_without_api_key_returns_none(self, monkeypatch):
-        import kitsune_mcp.credentials as creds
-
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", "")
-        reg = SmitheryRegistry()
-        result = await reg.get_server("any/server")
-        assert result is None
-
-
-class TestSmitheryRegistryWithMock:
-    async def test_search_returns_server_list(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key-123")
-        server_list = {
-            "servers": [
-                {
-                    "qualifiedName": "test-org/my-server",
-                    "displayName": "My Server",
-                    "description": "A great server",
-                    "remote": False,
-                    "connections": [],
-                }
-            ]
-        }
-        with respx.mock:
-            respx.get("https://registry.smithery.ai/servers").mock(
-                return_value=httpx.Response(200, json=server_list)
-            )
-            reg = SmitheryRegistry()
-            results = await reg.search("test", 5)
-
-        assert len(results) == 1
-        assert results[0].id == "test-org/my-server"
-        assert results[0].transport == "stdio"
-        assert results[0].source == "smithery"
-
-    async def test_search_remote_server_has_http_transport(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key-123")
-        server_list = {
-            "servers": [
-                {
-                    "qualifiedName": "test-org/remote-server",
-                    "displayName": "Remote Server",
-                    "description": "Hosted remotely",
-                    "remote": True,
-                    "connections": [],
-                }
-            ]
-        }
-        with respx.mock:
-            respx.get("https://registry.smithery.ai/servers").mock(
-                return_value=httpx.Response(200, json=server_list)
-            )
-            reg = SmitheryRegistry()
-            results = await reg.search("remote", 5)
-
-        assert results[0].transport == "http"
-        assert "server.smithery.ai" in results[0].url
-
-    async def test_search_extracts_credentials(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key-123")
-        server_list = {
-            "servers": [
-                {
-                    "qualifiedName": "org/cred-server",
-                    "displayName": "Cred Server",
-                    "description": "Needs creds",
-                    "remote": False,
-                    "connections": [
-                        {
-                            "configSchema": {
-                                "properties": {
-                                    "apiKey": {"description": "Your API key"},
-                                    "token": {"description": "Auth token"},
-                                }
-                            }
-                        }
-                    ],
-                }
-            ]
-        }
-        with respx.mock:
-            respx.get("https://registry.smithery.ai/servers").mock(
-                return_value=httpx.Response(200, json=server_list)
-            )
-            reg = SmitheryRegistry()
-            results = await reg.search("cred", 5)
-
-        assert "apiKey" in results[0].credentials
-        assert "token" in results[0].credentials
-
-    async def test_search_http_error_returns_empty(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key-123")
-        with respx.mock:
-            respx.get("https://registry.smithery.ai/servers").mock(
-                return_value=httpx.Response(500, text="Internal Server Error")
-            )
-            reg = SmitheryRegistry()
-            results = await reg.search("test", 5)
-        assert results == []
-
-
-# ---------------------------------------------------------------------------
-# NpmRegistry tests
-# ---------------------------------------------------------------------------
+from server import NpmRegistry
 
 
 class TestNpmRegistry:
@@ -228,42 +108,8 @@ class TestNpmRegistry:
 class TestMultiRegistryGetServerParallel:
     """MultiRegistry.get_server() should query all registries in parallel."""
 
-    async def test_returns_smithery_result_when_available(self, monkeypatch):
-        monkeypatch.setenv("SMITHERY_API_KEY", "test-key")
-        smithery_detail = {
-            "qualifiedName": "exa/exa",
-            "displayName": "Exa",
-            "description": "Exa web search",
-            "remote": True,
-            "connections": [],
-            "tools": [],
-        }
-        npm_detail = {
-            "name": "exa",
-            "description": "Exa npm fallback",
-            "dist-tags": {"latest": "1.0.0"},
-            "versions": {"1.0.0": {"description": "Exa npm fallback"}},
-        }
-        with respx.mock:
-            respx.get("https://registry.smithery.ai/servers/exa/exa").mock(
-                return_value=httpx.Response(200, json=smithery_detail)
-            )
-            respx.get("https://registry.npmjs.org/exa/exa").mock(
-                return_value=httpx.Response(200, json=npm_detail)
-            )
-            from server import MultiRegistry
+    async def test_falls_back_to_npm(self, monkeypatch):
 
-            reg = MultiRegistry()
-            result = await reg.get_server("exa/exa")
-
-        assert result is not None
-        assert result.source == "smithery"
-
-    async def test_falls_back_to_npm_when_smithery_unavailable(self, monkeypatch):
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        import kitsune_mcp.credentials as creds
-
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", None)
         npm_detail = {
             "name": "mcp-server-brave-search",
             "description": "Brave search MCP",
@@ -283,10 +129,7 @@ class TestMultiRegistryGetServerParallel:
         assert result.source == "npm"
 
     async def test_returns_none_when_all_fail(self, monkeypatch):
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        import kitsune_mcp.credentials as creds
 
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", None)
         with respx.mock:
             respx.get("https://registry.npmjs.org/totally-unknown-pkg-xyz").mock(
                 return_value=httpx.Response(404, text="Not Found")
@@ -303,10 +146,7 @@ class TestMultiRegistryCaching:
     """MultiRegistry TTL cache for get_server() and search()."""
 
     async def test_get_server_returns_cached_result(self, monkeypatch):
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        import kitsune_mcp.credentials as creds
 
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", None)
         npm_detail = {
             "name": "mcp-server-cached",
             "description": "Cached server",
@@ -329,10 +169,7 @@ class TestMultiRegistryCaching:
         assert second is first  # same object from cache
 
     async def test_bust_cache_clears_all(self, monkeypatch):
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        import kitsune_mcp.credentials as creds
 
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", None)
         npm_detail = {
             "name": "mcp-server-bustable",
             "description": "Bustable server",
@@ -354,10 +191,7 @@ class TestMultiRegistryCaching:
         assert route.call_count == 2
 
     async def test_search_returns_cached_result(self, monkeypatch):
-        monkeypatch.delenv("SMITHERY_API_KEY", raising=False)
-        import kitsune_mcp.credentials as creds
 
-        monkeypatch.setattr(creds, "SMITHERY_API_KEY", None)
         npm_search = {
             "objects": [
                 {
@@ -1300,3 +1134,52 @@ class TestMcpRegistryIOv01:
             ]
         }
         assert McpRegistryIO._credentials(srv) == {"TOKEN": "d"}
+
+
+class TestRetiredHosts:
+    """Smithery-hosted URLs died on 2026-10-31; registries still list them."""
+
+    def _srv(self, url, transport="http", name="x"):
+        from kitsune_mcp.registry import ServerInfo
+
+        return ServerInfo(name, name, "d", "mcpregistry", transport, url=url)
+
+    def test_smithery_hosts_are_retired(self):
+        from kitsune_mcp.registry import _on_retired_host
+
+        assert _on_retired_host(self._srv("https://server.smithery.ai/@a/time/mcp"))
+        assert _on_retired_host(self._srv("https://brave.run.tools"))
+
+    def test_other_hosts_and_stdio_are_kept(self):
+        from kitsune_mcp.registry import _on_retired_host
+
+        assert not _on_retired_host(self._srv("https://mcp.exa.ai/mcp"))
+        assert not _on_retired_host(self._srv("https://notrun.tools.example/mcp"))
+        assert not _on_retired_host(self._srv("https://server.smithery.ai/x", transport="stdio"))
+        assert not _on_retired_host(self._srv(""))
+
+    async def test_search_drops_dead_entry_before_dedup(self):
+        """A dead hosted twin must not shadow a working entry of the same name."""
+        from server import MultiRegistry
+
+        dead = self._srv("https://server.smithery.ai/@a/time/mcp", name="time")
+        alive = self._srv("https://time.example/mcp", name="time")
+        first, second = AsyncMock(), AsyncMock()
+        first.search = AsyncMock(return_value=[dead])
+        second.search = AsyncMock(return_value=[alive])
+        reg = MultiRegistry()
+        reg._registries = [first, second]
+        reg._reg_names = ["a", "b"]
+        result = await reg.search("time", limit=5)
+        assert [s.url for s in result] == ["https://time.example/mcp"]
+
+    async def test_get_server_ignores_dead_entry(self):
+        from server import MultiRegistry
+
+        dead = self._srv("https://server.smithery.ai/@a/time/mcp", name="time")
+        only = AsyncMock()
+        only.get_server = AsyncMock(return_value=dead)
+        reg = MultiRegistry()
+        reg._registries = [only]
+        reg._reg_names = ["a"]
+        assert await reg.get_server("time") is None

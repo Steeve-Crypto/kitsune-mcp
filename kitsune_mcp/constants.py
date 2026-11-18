@@ -79,5 +79,5 @@ STDIO_BUFFER_LIMIT = 8 * 1024 * 1024
 
 # Source trust tiers — used to gate warnings in shapeshift / call / connect output
 TRUST_HIGH = {"official", "absorbed"}  # absorbed = the user's own client config
-TRUST_MEDIUM = {"mcpregistry", "glama", "smithery"}
+TRUST_MEDIUM = {"mcpregistry", "glama"}
 TRUST_LOW = {"npm", "pypi", "github"}

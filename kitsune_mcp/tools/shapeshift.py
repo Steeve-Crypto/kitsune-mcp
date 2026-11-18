@@ -34,8 +34,8 @@ def _schemas_missing_required(schemas: list) -> bool:
     """True if the registry listing looks thin: some tool declares `properties`
     but no tool declares a `required` array.
 
-    Smithery's registry listing returns `inputSchema` with `type`/`properties`
-    but omits `required` entirely. That leaves both the registered proxy schema
+    Some registry listings return `inputSchema` with `type`/`properties`
+    but omit `required` entirely. That leaves both the registered proxy schema
     and the call-example hint unable to tell which params are mandatory — so the
     hint shows `arguments={}` and the model under-fills required params. A live
     `list_tools()` recovers the full schema. The false-positive case (a server
@@ -251,7 +251,7 @@ async def shapeshift(
 
     sandbox: None (default) cages low-trust npm/PyPI/github sources in Docker when
     it's available (best-effort — runs uncaged with a nudge if not); True forces
-    the cage; False opts out. source: auto|local|smithery|official.
+    the cage; False opts out. source: auto|local|official.
     confirm=True for community sources.
     """
     if not server_id:
@@ -294,18 +294,19 @@ async def shapeshift(
                 )
 
     # Registry path — source controls which registries/transports are preferred
-    if source == "smithery" and not _state._smithery_available():
+    if source == "smithery":
         return (
-            f"❌ shapeshift failed: source='smithery' requires SMITHERY_API_KEY (not set).\n\n"
-            f'Set it: auth("SMITHERY_API_KEY", "your-key")\n'
-            f'Or use: shapeshift("{server_id}", source="local") to install locally.'
+            "❌ shapeshift failed: source='smithery' is gone — Smithery shut down its API "
+            "and hosted servers on 2026-10-31.\n\n"
+            f'Use: shapeshift("{server_id}") to resolve it from the other registries, '
+            "or pass the server's own https:// MCP URL."
         )
 
     auto_resolved_from: str | None = None
     if server_id.startswith(("http://", "https://")):
         srv = _state._synthetic_http_server(server_id)
     else:
-        reg_source = source if source in ("smithery", "official") else None
+        reg_source = source if source == "official" else None
         srv = await _state._registry.get_server(server_id, source_preference=reg_source)
         if srv is None:
             # Auto-recover from typos / wrong namespaces (e.g. "@modelcontextprotocol/server-time"
@@ -375,21 +376,6 @@ async def shapeshift(
             "To always trust local installs: the user sets KITSUNE_TRUST=community in ~/.kitsune/.env"
         )
 
-    # Pre-flight gate: Smithery-hosted servers always need SMITHERY_API_KEY
-    # regardless of whether srv.credentials declares per-server creds. This
-    # prevents the most common first-run failure where the agent shapeshifts
-    # successfully, then hits "Auth failed" on the first tool call.
-    if srv_source == "smithery" and not _state._smithery_available() and not confirm:
-        return (
-            f"❌ shapeshift failed: '{server_id}' is hosted on Smithery and needs SMITHERY_API_KEY.\n"
-            f"\n"
-            f"  → Get a key: https://smithery.ai/account/api-keys\n"
-            f'  → Then: auth("SMITHERY_API_KEY", "sm-...") and retry shapeshift("{server_id}")\n'
-            f"\n"
-            f'  Or use: shapeshift("{server_id}", source="local", confirm=True)\n'
-            f"        to install locally without a Smithery key (community trust gate applies)."
-        )
-
     # All gates passed — resolve credentials before dropping current form
     resolved_config, missing = _state._resolve_config(srv.credentials, {})
     if missing:
@@ -401,9 +387,9 @@ async def shapeshift(
     if source == "local" and srv.transport == "http" and not srv.install_cmd:
         return (
             f"❌ source='local' not available for '{server_id}'.\n\n"
-            f"This server is HTTP-only on Smithery — no local stdio package is listed.\n"
+            f"This server is HTTP-only — no local stdio package is listed.\n"
             f"Options:\n"
-            f'  • shapeshift("{server_id}") — use Smithery Connect (needs SMITHERY_API_KEY)\n'
+            f'  • shapeshift("{server_id}") — connect to its hosted URL\n'
             f'  • search("{server_id.split("/")[-1]}") — find a stdio/npm alternative\n'
             f"  • If an npm package exists, shapeshift it directly:\n"
             f'    shapeshift("@scope/pkg-name", source="local", confirm=True)'

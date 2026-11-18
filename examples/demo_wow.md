@@ -49,8 +49,8 @@ Tool Search client. Kitsune earns it back by reaching the servers deferral can't
 search("web search")
 ```
 
-Results come from the official registry first, then Smithery (if you have a key),
-then npm/PyPI/Glama. Each row ends with a **works-now signal** — `ready: high | mid
+Results come from the official registry first, then the MCP Registry, Glama,
+npm and PyPI. Each row ends with a **works-now signal** — `ready: high | mid
 | low` — a no-probe heuristic (creds resolved + trusted source + local transport)
 so you can see at a glance which hits are likely to run without setup.
 

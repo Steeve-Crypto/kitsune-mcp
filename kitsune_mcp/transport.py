@@ -1,7 +1,6 @@
 import asyncio
 import atexit
 import contextlib
-import datetime
 import hashlib
 import itertools
 import json
@@ -35,8 +34,6 @@ from kitsune_mcp.constants import (
     TIMEOUT_STDIO_INIT,
     TIMEOUT_STDIO_TOOL,
 )
-from kitsune_mcp.credentials import SMITHERY_API_KEY, _credentials_guide, _resolve_config
-from kitsune_mcp.registry import SmitheryRegistry
 from kitsune_mcp.session import _save_state, session
 from kitsune_mcp.utils import (
     _clean_truncate,
@@ -357,149 +354,6 @@ async def _read_stdio_response(reader, expected_id: int, timeout: float = 30.0) 
                 return msg
         except (json.JSONDecodeError, UnicodeDecodeError):
             pass
-
-
-# ---------------------------------------------------------------------------
-# Smithery Connect helpers (new API — api.smithery.ai/connect)
-# ---------------------------------------------------------------------------
-
-_SMITHERY_API_BASE = "https://api.smithery.ai"
-
-
-@dataclass
-class _SmitheryAuth:
-    """Single owner of Smithery namespace + service-token state.
-
-    Async-safe: concurrent callers past the cache miss serialize on the lock,
-    so only one HTTP refresh happens per expiry window (no thundering herd).
-    """
-
-    namespace: str | None = None
-    service_token: str = ""
-    token_expires: float = 0.0
-    namespace_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    token_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    connections: dict[str, str] = field(default_factory=dict)  # conn_id → mcpUrl
-
-    def reset(self) -> None:
-        """Clear all cached state (for tests or explicit re-auth)."""
-        self.namespace = None
-        self.service_token = ""
-        self.token_expires = 0.0
-        self.connections.clear()
-
-    async def get_namespace(self) -> str | None:
-        if self.namespace:
-            return self.namespace
-        api_key = os.getenv("SMITHERY_API_KEY") or SMITHERY_API_KEY
-        if not api_key:
-            return None
-        async with self.namespace_lock:
-            if self.namespace:  # double-check after lock
-                return self.namespace
-            try:
-                r = await _get_http_client().get(
-                    f"{_SMITHERY_API_BASE}/namespaces",
-                    headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                    timeout=10,
-                )
-                r.raise_for_status()
-                namespaces = r.json().get("namespaces", [])
-                if namespaces:
-                    self.namespace = namespaces[0]["name"]
-            except Exception:
-                pass
-        return self.namespace
-
-    async def get_token(self) -> str:
-        now = time.monotonic()
-        if self.service_token and now < self.token_expires:
-            return self.service_token
-        api_key = os.getenv("SMITHERY_API_KEY") or SMITHERY_API_KEY
-        if not api_key:
-            return ""
-        async with self.token_lock:
-            now = time.monotonic()
-            if self.service_token and now < self.token_expires:
-                return self.service_token
-            try:
-                r = await _get_http_client().post(
-                    f"{_SMITHERY_API_BASE}/tokens",
-                    json={"name": "kitsune-mcp", "scopes": ["mcp"]},
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                    },
-                    timeout=10,
-                )
-                r.raise_for_status()
-                data = r.json()
-                self.service_token = data["token"]
-                expires_at = datetime.datetime.fromisoformat(
-                    data["expiresAt"].replace("Z", "+00:00")
-                )
-                ttl = (expires_at - datetime.datetime.now(datetime.UTC)).total_seconds()
-                self.token_expires = now + max(ttl - 300, 60)  # refresh 5 min early
-            except Exception:
-                self.service_token = ""
-        return self.service_token
-
-
-_smithery_auth = _SmitheryAuth()
-
-
-# Backwards-compatible thin wrappers — keep call sites and tests stable.
-async def _smithery_namespace() -> str | None:
-    """Return the user's first Smithery namespace (cached for the session)."""
-    return await _smithery_auth.get_namespace()
-
-
-async def _smithery_service_token() -> str:
-    """Return a valid service token with mcp scope (cached, auto-refreshed)."""
-    return await _smithery_auth.get_token()
-
-
-def _smithery_conn_id(qualified_name: str) -> str:
-    """Stable, URL-safe connection ID derived from a qualified server name."""
-    sanitized = re.sub(r"[^a-z0-9-]", "-", qualified_name.lower()).strip("-")
-    return f"kitsune-{sanitized}"[:64]
-
-
-def _build_mcp_url(deployment_url: str, config: dict) -> str:
-    """Append non-null config values as query parameters to the deployment URL."""
-    clean = {k: v for k, v in config.items() if v is not None}
-    if not clean:
-        return deployment_url
-    qs = urllib.parse.urlencode(clean)
-    sep = "&" if "?" in deployment_url else "?"
-    return f"{deployment_url}{sep}{qs}"
-
-
-async def _ensure_smithery_connection(namespace: str, conn_id: str, mcp_url: str) -> bool:
-    """Create or update a Smithery Connect connection. Returns True on success."""
-    # Skip if we already set up this conn_id with the same URL this session
-    if _smithery_auth.connections.get(conn_id) == mcp_url:
-        return True
-    api_key = os.getenv("SMITHERY_API_KEY") or SMITHERY_API_KEY
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    client = _get_http_client()
-    url = f"{_SMITHERY_API_BASE}/connect/{namespace}/{conn_id}"
-    try:
-        r = await client.put(url, json={"mcpUrl": mcp_url}, headers=headers, timeout=15)
-        if r.status_code == 409:
-            # URL mismatch — delete existing and recreate
-            await client.delete(url, headers=headers, timeout=10)
-            r = await client.put(url, json={"mcpUrl": mcp_url}, headers=headers, timeout=15)
-        r.raise_for_status()
-        _smithery_auth.connections[conn_id] = mcp_url
-        return True
-    except Exception:
-        return False
 
 
 class _SSEParser:
@@ -913,57 +767,28 @@ def _drop_http_session(key: tuple[str, str], sess: _HTTPSession) -> None:
 
 
 class HTTPSSETransport(BaseTransport):
-    """Execute tool calls against an HTTP MCP server.
+    """Execute tool calls against a hosted HTTP MCP server.
 
-    Two modes:
-    - Smithery-mediated (default): uses api.smithery.ai/connect with per-user
-      namespaced connections and a service token.
-    - Direct OAuth (`direct=True`): hits the server URL directly and attaches
-      no token at first; a 401/403 runs OAuth 2.1 discovery and login
-      (`kitsune_mcp.oauth.authenticate`), and later calls send the token.
+    Requests go straight to the server URL with no token at first; a 401/403
+    runs OAuth 2.1 discovery and login (`kitsune_mcp.oauth.authenticate`), and
+    later calls send the token.
     """
 
-    def __init__(
-        self,
-        qualified_name: str,
-        deployment_url: str = "",
-        direct: bool = False,
-    ):
+    def __init__(self, qualified_name: str, deployment_url: str = ""):
         self.qualified_name = qualified_name
-        self.direct = direct
-        if direct:
-            # qualified_name IS the URL in direct mode; deployment_url is the
-            # same URL so downstream code (list_tools, execute) stays uniform.
-            self.deployment_url = deployment_url or qualified_name
-        else:
-            # deployment_url comes from the registry's deploymentUrl field,
-            # e.g. "https://brave.run.tools"
-            self.deployment_url = deployment_url or f"https://{qualified_name}.run.tools"
+        # For a bare URL, qualified_name IS the URL; deployment_url is the same
+        # URL so downstream code (list_tools, execute) stays uniform.
+        self.deployment_url = deployment_url or qualified_name
 
     async def _connect_endpoint(self, config: dict) -> tuple[str, str] | None:
-        """Return (endpoint_url, bearer_token) or None on failure."""
-        if self.direct:
-            # A stored login if there is one, else no token: public servers need
-            # none, and one that does answers 401, which starts the login.
-            try:
-                token = await oauth.stored_token(self.deployment_url)
-            except Exception:
-                token = ""
-            return self.deployment_url, token
-
-        namespace = await _smithery_namespace()
-        if not namespace:
-            return None
-        token = await _smithery_service_token()
-        if not token:
-            return None
-        mcp_url = _build_mcp_url(self.deployment_url, config)
-        conn_id = _smithery_conn_id(self.qualified_name)
-        ok = await _ensure_smithery_connection(namespace, conn_id, mcp_url)
-        if not ok:
-            return None
-        endpoint = f"{_SMITHERY_API_BASE}/connect/{namespace}/{conn_id}/mcp"
-        return endpoint, token
+        """Return (endpoint_url, bearer_token)."""
+        # A stored login if there is one, else no token: public servers need
+        # none, and one that does answers 401, which starts the login.
+        try:
+            token = await oauth.stored_token(self.deployment_url)
+        except Exception:
+            token = ""
+        return self.deployment_url, token
 
     async def _session(
         self, key: tuple[str, str], endpoint: str, bearer: str, stale: _HTTPSession | None
@@ -1142,28 +967,17 @@ class HTTPSSETransport(BaseTransport):
                 f"Timeout connecting to {self.qualified_name}. Server may be sleeping — try again."
             )
         except PermissionError as e:
-            # Direct: the server refused the request before running it, so it is
+            # The server refused the request before running it, so it is
             # safe to log in (or refresh) and send it once more.
-            if self.direct:
-                try:
-                    new_token = await self._reauthenticate(e, token)
-                    response = await asyncio.wait_for(_run(new_token), timeout=TIMEOUT_HTTP_TOOL)
-                except CallOutcomeUnknown as e2:
-                    return _outcome_unknown_message(tool, self.qualified_name, str(e2))
-                except oauth.NoAuthMetadata as e2:
-                    return f"{self.qualified_name} needs authorization: {e2}"
-                except Exception as e2:
-                    return f"OAuth failed for {self.qualified_name}: {e2}"
-            else:
-                srv = await SmitheryRegistry().get_server(self.qualified_name)
-                if srv and srv.credentials:
-                    resolved, missing = _resolve_config(srv.credentials, config)
-                    if missing:
-                        return _credentials_guide(self.qualified_name, srv.credentials, resolved)
-                return (
-                    f"Auth failed for {self.qualified_name}. "
-                    "Check SMITHERY_API_KEY at smithery.ai/account/api-keys"
-                )
+            try:
+                new_token = await self._reauthenticate(e, token)
+                response = await asyncio.wait_for(_run(new_token), timeout=TIMEOUT_HTTP_TOOL)
+            except CallOutcomeUnknown as e2:
+                return _outcome_unknown_message(tool, self.qualified_name, str(e2))
+            except oauth.NoAuthMetadata as e2:
+                return f"{self.qualified_name} needs authorization: {e2}"
+            except Exception as e2:
+                return f"OAuth failed for {self.qualified_name}: {e2}"
         except Exception as e:
             return f"Failed to connect to {self.qualified_name}: {e}"
 
@@ -1181,12 +995,7 @@ class HTTPSSETransport(BaseTransport):
         return await oauth.authenticate(self.deployment_url, challenge, rejected=rejected or None)
 
     def _connect_failure_message(self) -> str:
-        if self.direct:
-            return f"Cannot reach {self.qualified_name}."
-        return (
-            f"Cannot reach {self.qualified_name} via Smithery Connect. "
-            "Check SMITHERY_API_KEY at smithery.ai/account/api-keys"
-        )
+        return f"Cannot reach {self.qualified_name}."
 
     async def list_tools(self, config: dict | None = None) -> list[dict]:
         """Fetch tools/list from the configured endpoint."""
@@ -1206,8 +1015,6 @@ class HTTPSSETransport(BaseTransport):
         try:
             return await asyncio.wait_for(_run(token), timeout=TIMEOUT_HTTP_TOOL)
         except PermissionError as e:
-            if not self.direct:
-                return []
             try:
                 new_token = await self._reauthenticate(e, token)
                 return await asyncio.wait_for(_run(new_token), timeout=TIMEOUT_HTTP_TOOL)
@@ -1215,6 +1022,32 @@ class HTTPSSETransport(BaseTransport):
                 return []
         except Exception:
             return []
+
+
+class UnresolvedTransport(BaseTransport):
+    """Stand-in for a server id no registry resolved and that is not a URL.
+
+    Every call returns a clear "not found" message instead of guessing a host.
+    """
+
+    def __init__(self, server_id: str):
+        self.qualified_name = server_id
+
+    def _message(self) -> str:
+        return (
+            f"Server '{self.qualified_name}' was not found in any registry. "
+            "Use search() to find it, pass a hosted server's https:// URL, "
+            "or connect() a local command."
+        )
+
+    async def execute(self, tool: str, args: dict, config: dict) -> str:
+        return self._message()
+
+    async def call_tool(self, tool: str, args: dict, config: dict) -> dict | str:
+        return self._message()
+
+    async def list_tools(self, config: dict | None = None) -> list[dict]:
+        return []
 
 
 class StdioTransport(BaseTransport):

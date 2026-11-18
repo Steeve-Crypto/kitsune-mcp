@@ -7,15 +7,15 @@ Kitsune MCP supports several transport types. Here's when to use each.
 ```
 Does the server need to stay alive between calls?
 ├── Yes → PersistentStdioTransport  (use connect() / release())
-└── No → Is it hosted on smithery.ai?
+└── No → Is it a hosted server (https:// URL)?
           ├── Yes → HTTPSSETransport  (automatic for remote servers)
           └── No → StdioTransport    (automatic for stdio servers)
 ```
 
 ## HTTPSSETransport
 
-**When:** remote servers: Smithery-hosted (`remote: true` in the registry) or a
-direct `https://` URL.
+**When:** remote servers: a registry entry with a hosted URL, or a direct
+`https://` URL.
 
 **How it works:**
 
@@ -35,8 +35,7 @@ direct `https://` URL.
 A `tools/call` whose reply is lost is never sent again: Kitsune reports
 "outcome unknown", because the call may already have run.
 
-**Config:** Smithery needs `SMITHERY_API_KEY`; config is passed as base64 in URL
-params. Direct URLs start without a token, so public servers just work. A
+**Config:** requests start without a token, so public servers just work. A
 server that wants a login answers 401; Kitsune follows its `WWW-Authenticate`
 challenge to the protected-resource metadata and the authorization server
 (which may live on another origin), logs in once in the browser, and sends the
@@ -65,7 +64,7 @@ cursors, so `shapeshift()` can discover the server's tools.
 
 ## StdioTransport
 
-**When:** Local npm/pip packages, stdio-mode Smithery servers.
+**When:** Local npm/pip packages.
 
 **How it works:**
 1. Spawns subprocess: `npx -y package-name` or `uvx package-name`
@@ -106,7 +105,7 @@ release("voice")  # kills process, removes from pool
 
 | Scenario | Transport | Command |
 |----------|-----------|---------|
-| Smithery hosted API | HTTPSSETransport | `call()` / `shapeshift()` automatic |
+| Hosted HTTP server | HTTPSSETransport | `call()` / `shapeshift()` automatic |
 | One-shot npm tool | StdioTransport | `call()` / `run()` / `shapeshift()` automatic |
 | Audio/hardware tool | PersistentStdioTransport | `connect()` then `release()` |
 | Unknown server | Auto-detected | `call()` detects from registry |

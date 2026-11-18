@@ -36,9 +36,6 @@ def _load_dotenv_files() -> None:
 # _reload_dotenv() would and the mtime baseline below matches what is loaded.
 _load_dotenv_files()
 
-# Read at import time (server.py must call load_dotenv() before this import)
-SMITHERY_API_KEY = os.getenv("SMITHERY_API_KEY", "")
-
 # Revision counter — increments whenever any .env file changes on disk.
 # Pool entries store their revision at spawn time; stale entries are evicted
 # and respawned so they pick up new credentials automatically.
@@ -86,18 +83,6 @@ def _reload_dotenv() -> None:
         _load_dotenv_files()
         _dotenv_revision += 1
         _last_dotenv_mtimes = current_mtimes
-
-
-def _registry_headers():
-    api_key = os.getenv("SMITHERY_API_KEY") or SMITHERY_API_KEY
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "Accept": "application/json",
-    }
-
-
-def _smithery_available() -> bool:
-    return bool(os.getenv("SMITHERY_API_KEY") or SMITHERY_API_KEY)
 
 
 def _to_env_var(k: str) -> str:
@@ -235,7 +220,7 @@ def _resolve_config(credentials: dict, user_config: dict) -> tuple:
     for cred_key in credentials:
         if not resolved.get(cred_key):
             val = os.getenv(_to_env_var(cred_key)) or None
-            resolved[cred_key] = val  # None → JSON null, satisfies Smithery config schema
+            resolved[cred_key] = val  # None → JSON null, satisfies the server's config schema
     # Only block on real secrets — env vars ending in a credential suffix.
     # Optional config knobs (ENABLED_TOOLS, LOGGING_LEVEL, etc.) are not blockers.
     missing = {
@@ -272,17 +257,10 @@ def _credentials_ready(credentials: dict, source: str = "") -> str:
 
     Three tiers, all explicit (never just "no creds declared"):
       ✅ free – no key       — official/npm/pypi sources without declared creds
-      🔑 key required        — Smithery-hosted servers (always need SMITHERY_API_KEY)
-                               or any server with declared creds
+      🔑 key required        — any server with declared creds
       ⚠️  key unknown         — community sources (glama/github) without declared creds —
                                undeclared ≠ free; runtime auth may still fail
     """
-    # Smithery-hosted servers always require SMITHERY_API_KEY regardless of
-    # whether the registry entry declares per-server creds. This is the most
-    # common first-run failure source — "no creds declared" misled users.
-    if source == "smithery":
-        return "✓ env set" if _smithery_available() else "🔑 needs SMITHERY_API_KEY"
-
     if not credentials:
         if source in TRUST_LOW:
             return "⚠️  community — may need creds"

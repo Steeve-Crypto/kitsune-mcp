@@ -172,52 +172,6 @@ class MockStdout:
 
 
 @pytest.fixture
-def mock_smithery_server():
-    """Mock Smithery registry responses."""
-    server_list = {
-        "servers": [
-            {
-                "qualifiedName": "test-org/test-server",
-                "displayName": "Test Server",
-                "description": "A test MCP server for unit tests",
-                "remote": False,
-                "connections": [
-                    {"configSchema": {"properties": {"apiKey": {"description": "Your API key"}}}}
-                ],
-            }
-        ]
-    }
-    server_detail = {
-        "qualifiedName": "test-org/test-server",
-        "displayName": "Test Server",
-        "description": "A test MCP server for unit tests",
-        "remote": False,
-        "connections": [
-            {"configSchema": {"properties": {"apiKey": {"description": "Your API key"}}}}
-        ],
-        "tools": [
-            {
-                "name": "do_thing",
-                "description": "Does a thing",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {"query": {"type": "string"}},
-                    "required": ["query"],
-                },
-            }
-        ],
-    }
-    with respx.mock:
-        respx.get("https://registry.smithery.ai/servers").mock(
-            return_value=httpx.Response(200, json=server_list)
-        )
-        respx.get("https://registry.smithery.ai/servers/test-org/test-server").mock(
-            return_value=httpx.Response(200, json=server_detail)
-        )
-        yield server_list, server_detail
-
-
-@pytest.fixture
 def mock_npm_server():
     """Mock npm registry responses."""
     npm_search = {

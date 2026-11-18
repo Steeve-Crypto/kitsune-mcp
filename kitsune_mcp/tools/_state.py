@@ -20,7 +20,6 @@ from kitsune_mcp.constants import (
 )
 from kitsune_mcp.credentials import (
     _resolve_config,  # noqa: F401  (accessed as _state._resolve_config in shapeshift + tests)
-    _smithery_available,  # noqa: F401  (accessed as _state._smithery_available in shapeshift + tests)
     _to_env_var,
 )
 from kitsune_mcp.pins import (
@@ -33,7 +32,6 @@ from kitsune_mcp.probe import (
 from kitsune_mcp.registry import (
     NpmRegistry,  # noqa: F401  (accessed as _state.NpmRegistry in discovery.py)
     PyPIRegistry,  # noqa: F401  (accessed as _state.PyPIRegistry in discovery.py)
-    SmitheryRegistry,  # noqa: F401  (accessed as _state.SmitheryRegistry in discovery.py)
     _registry,
 )
 from kitsune_mcp.session import session
@@ -49,6 +47,7 @@ from kitsune_mcp.transport import (
     DockerTransport,
     HTTPSSETransport,
     PersistentStdioTransport,
+    UnresolvedTransport,
     WebSocketTransport,
     sandbox_wrap_cmd,  # noqa: F401  (accessed as _state.sandbox_wrap_cmd in shapeshift + tests)
 )
@@ -73,7 +72,6 @@ _BASE_TOOL_NAMES = {
     "call",
     "run",
     "fetch",
-    "skill",
     "key",
     "login",
     "auto",
@@ -155,18 +153,16 @@ def _get_transport(server_id: str, srv) -> "BaseTransport":
         # Direct URL escape hatch: a hosted HTTP MCP server. Requests go out
         # without a token until the server answers 401; then kitsune_mcp.oauth
         # follows its challenge to log in, and later requests carry the token.
-        return HTTPSSETransport(server_id, deployment_url=server_id, direct=True)
+        return HTTPSSETransport(server_id, deployment_url=server_id)
     if srv is not None and getattr(srv, "transport", None) == "websocket":
         return WebSocketTransport(srv.url)
     if srv is not None and getattr(srv, "transport", None) == "stdio":
         cmd = srv.install_cmd or ["npx", "-y", server_id]
         return PersistentStdioTransport(cmd)
     if srv is not None and getattr(srv, "transport", None) == "http":
-        # Hosted HTTP MCP from the registry. If the URL isn't Smithery's
-        # run.tools domain, assume it's a direct server and use OAuth.
-        direct = ".run.tools" not in (srv.url or "")
-        return HTTPSSETransport(srv.id, deployment_url=srv.url, direct=direct)
-    return HTTPSSETransport(server_id)
+        # Hosted HTTP MCP from the registry: talk to its URL directly (OAuth on 401).
+        return HTTPSSETransport(srv.id, deployment_url=srv.url)
+    return UnresolvedTransport(server_id)
 
 
 def _extract_tool_schema(tool: dict) -> tuple[dict, set]:

@@ -13,7 +13,6 @@ import sys
 
 # Must be set before server.py imports — controls which tools are registered.
 os.environ.setdefault("KITSUNE_TOOLS", "all")
-os.environ.setdefault("SMITHERY_API_KEY", "")  # suppress key-not-set warnings
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

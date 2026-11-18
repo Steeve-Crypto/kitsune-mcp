@@ -146,7 +146,7 @@ async def test_auto_surfaces_registry_errors_on_no_tools():
     mock_srv = MagicMock()
     mock_srv.tools = []
     mock_srv.transport = "http"
-    mock_srv.source = "smithery"
+    mock_srv.source = "mcpregistry"
     mock_srv.id = "weathermap"
     mock_srv.name = "weathermap"
     mock_srv.credentials = {}
@@ -158,15 +158,11 @@ async def test_auto_surfaces_registry_errors_on_no_tools():
         "mcpregistry": "HTTPStatusError",
     }
 
-    with (
-        patch("kitsune_mcp.tools.onboarding._state") as mock_state,
-        patch("kitsune_mcp.credentials._smithery_available", return_value=False),
-    ):
+    with patch("kitsune_mcp.tools.onboarding._state") as mock_state:
         mock_state._registry = mock_registry
         mock_state._resolve_config = MagicMock(return_value=({}, {}))
         result = await auto("weather in Tokyo", server_hint="weathermap")
 
     assert "could not fetch tool schema" in result
     assert "glama" in result or "mcpregistry" in result
-    assert "SMITHERY_API_KEY" in result
-    assert "auth(" in result
+    assert "SMITHERY_API_KEY" not in result

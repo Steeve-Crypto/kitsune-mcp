@@ -15,7 +15,7 @@ Reach into 130k community servers only works if unknown code can be **contained*
 | Tier | Sources | On mount |
 |---|---|---|
 | High | `official` | runs directly |
-| Medium | `mcpregistry`, `glama`, `smithery` | runs directly |
+| Medium | `mcpregistry`, `glama` | runs directly |
 | Community | `npm`, `pypi`, `github` | **requires `confirm=True`** |
 | Your own | local `connect()` command | runs directly, as your user, uncaged. Approve `connect` in your client |
 

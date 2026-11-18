@@ -81,7 +81,7 @@ class TestAutoCompositeRank:
             id="brave-search",
             name="Brave Web Search",
             description="search the web",
-            source="smithery",
+            source="mcpregistry",
             credentials={"BRAVE_API_KEY": "required"},
         )
         # High-operability server with unrelated purpose

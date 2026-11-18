@@ -35,8 +35,8 @@ def test_blocked_helper_with_fallback():
 
     result = _blocked(
         what="schema fetch failed",
-        why="no SMITHERY_API_KEY",
-        fix="auth('SMITHERY_API_KEY', 'sm-...')",
+        why="no EXA_API_KEY",
+        fix="auth('EXA_API_KEY', '...')",
         fallback="search() for a free alternative",
     )
     assert "  Alt:" in result

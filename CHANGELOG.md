@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 ---
 
+## [Unreleased]
+
+### Removed
+- **Smithery support.** Smithery, now part of Arcade.dev, shut down its API, Connect proxy, API keys and hosted `server.smithery.ai` / `*.run.tools` URLs on 2026-10-31 ([notice](https://smithery.ai/future)). Kitsune no longer searches the Smithery registry, routes calls through Smithery Connect, or reads `SMITHERY_API_KEY` (it is ignored if still set). `status()` and `onboard()` no longer list Smithery or ping it. `smithery.yaml` and the `SMITHERY_API_KEY` entries in `server.json` are gone.
+- **The `skill()` tool** (full profile only). It loaded skills from Smithery's API and cannot work without it. Skills already cached in `~/.kitsune/skills.json` still show in `status()`.
+
+**Behaviour changes to know about:**
+- `search(registry="smithery")` and `shapeshift(..., source="smithery")` return a message pointing to the other registries instead of results.
+- Hosted HTTP servers from any registry are reached at their own URL; a 401 starts the OAuth login as for any direct URL.
+- Registry entries whose hosted URL is on Smithery (`server.smithery.ai`, `*.run.tools`) are left out of `search()` and lookups. The MCP Registry still lists hundreds of them (`ai.smithery/*`), and they all return 404 now.
+- A server id that no registry knows and that is not a URL now fails with "not found in any registry". Before, Kitsune guessed it was hosted on Smithery.
+
+---
+
 ## [0.23.0] — 2026-11-08
 
 Wire-correct: the first milestone on the road to 1.0. The HTTP, legacy SSE and WebSocket transports now follow the protocol (#107, #109, #110). Public HTTP servers connect without a login, and logins follow the current MCP authorization spec (#112). Mounted tools keep their exact schemas, arguments and results (#113). MCP Registry entries parse again and search covers the whole registry (#111). Also: CodeQL fixes (#114) and an animated README logo (#108).

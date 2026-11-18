@@ -163,7 +163,7 @@ class TestAutoCapabilityFilter:
         searcher = _srv(
             id="exa",
             name="Exa",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             description="Fast, intelligent web search",
             tools=[_SEARCH_TOOL],

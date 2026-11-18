@@ -97,7 +97,7 @@ async def mounted(tmp_path, monkeypatch):
     while not srv.started:
         time.sleep(0.02)
     utils._http_client = None
-    transport = HTTPSSETransport(f"http://127.0.0.1:{port}/mcp", direct=True)
+    transport = HTTPSSETransport(f"http://127.0.0.1:{port}/mcp")
     tools = await transport.list_tools()
     names, failed = _register_proxy_tools("fixture", tools, transport, {})
     assert failed == [] and set(names) == {"find_docs", "echo", "fail", "picture", "code"}

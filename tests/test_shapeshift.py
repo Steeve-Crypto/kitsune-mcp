@@ -627,7 +627,7 @@ class TestMorphRegistersAll:
             id="http-org/http-server",
             name="http-server",
             description="",
-            source="smithery",
+            source="mcpregistry",
             transport="http",
             url="http-org/http-server",
             install_cmd=None,

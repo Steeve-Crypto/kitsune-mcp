@@ -122,7 +122,7 @@ async def test_local_http_only_error_does_not_shed_current_form():
     mock_srv = MagicMock()
     mock_srv.transport = "http"
     mock_srv.install_cmd = []  # empty — HTTP-only
-    mock_srv.source = "smithery"
+    mock_srv.source = "mcpregistry"
     mock_srv.credentials = {}
     mock_srv.tools = [{"name": "tool1", "description": "t", "inputSchema": {}}]
 
@@ -135,7 +135,6 @@ async def test_local_http_only_error_does_not_shed_current_form():
     ):
         mock_state._registry = AsyncMock()
         mock_state._registry.get_server = AsyncMock(return_value=mock_srv)
-        mock_state._smithery_available = MagicMock(return_value=True)
         mock_state._resolve_config = MagicMock(return_value=({}, {}))
         mock_state._do_shed = MagicMock()
 

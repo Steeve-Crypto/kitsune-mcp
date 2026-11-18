@@ -32,7 +32,7 @@ which means good new servers get under-tried and bad ones get over-trusted.
 ```python
 # 1. Find the candidate.
 search("vector database", limit=5)
-# → pinecone-mcp       | smithery/http   | ✓ creds set
+# → pinecone-mcp       | mcpregistry/http | ✓ creds set
 # → chroma-local       | npm/stdio       | ⚠ community
 # → qdrant-mcp         | mcpregistry/stdio | ✓
 # → ...
@@ -108,7 +108,7 @@ compare("vector database", limit=3, probe=True)
 # → Probes ALL candidates in parallel, returns a ranked table:
 #   tokens  tools  src        status     id
 #       340      3  npm        live       chroma-local
-#       680      6  smithery   live       pinecone-mcp
+#       680      6  mcpregistry live       pinecone-mcp
 #       450      4  mcpregistry live      qdrant-mcp
 ```
 

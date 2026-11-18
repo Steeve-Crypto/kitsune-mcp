@@ -1,4 +1,4 @@
-"""Onboarding tools: skill, key, auth, auto, setup."""
+"""Onboarding tools: key, auth, auto, setup."""
 
 import asyncio
 import contextlib
@@ -7,18 +7,13 @@ import os
 import re
 from datetime import UTC, datetime
 
-import httpx
-
 from kitsune_mcp.adapters import get_adapter, get_adapter_for_category
 from kitsune_mcp.app import mcp
 from kitsune_mcp.constants import (
-    TIMEOUT_FETCH_URL,
     TIMEOUT_STDIO_INIT,
 )
 from kitsune_mcp.credentials import (
-    _registry_headers,
     _save_to_env,
-    _smithery_available,
     _to_env_var,
     invalid_env_entry,
     invalid_env_message,
@@ -27,104 +22,9 @@ from kitsune_mcp.credentials import (
 )
 from kitsune_mcp.guard import guard_call
 from kitsune_mcp.probe import _format_setup_guide
-from kitsune_mcp.registry import REGISTRY_BASE, _relevance_score, _works_now_score
-from kitsune_mcp.session import _save_skills, session
+from kitsune_mcp.registry import _relevance_score, _works_now_score
+from kitsune_mcp.session import session
 from kitsune_mcp.tools import _state
-from kitsune_mcp.utils import _get_http_client, _is_safe_url
-
-
-@mcp.tool()
-async def skill(qualified_name: str, forget: bool = False) -> str:
-    """Load a Smithery skill into context. forget=True removes it."""
-    # --- forget / uninstall ---
-    if forget:
-        if qualified_name in session["skills"]:
-            name = session["skills"][qualified_name].get("name", qualified_name)
-            del session["skills"][qualified_name]
-            _save_skills()
-            return f"Skill removed: {name} ({qualified_name})"
-        return f"Skill '{qualified_name}' is not installed."
-
-    # --- serve from cache if already loaded ---
-    cached = session["skills"].get(qualified_name)
-    if cached and cached.get("content"):
-        content = cached["content"]
-        skill_name = cached.get("name", qualified_name)
-        token_estimate = cached.get("tokens", len(content) // 4)
-        lines = [
-            f"Skill injected (cached): {skill_name} ({qualified_name})",
-            f"Context cost: ~{token_estimate:,} tokens",
-            "",
-            "--- SKILL CONTENT ---",
-            "",
-            content,
-        ]
-        return "\n".join(lines)
-
-    # --- fetch from Smithery API ---
-    if not _state._smithery_available():
-        return "No SMITHERY_API_KEY set. Run: auth('SMITHERY_API_KEY', 'your-key')"
-
-    try:
-        r = await _get_http_client().get(
-            f"{REGISTRY_BASE}/skills/{qualified_name}",
-            headers=_registry_headers(),
-            timeout=TIMEOUT_FETCH_URL,
-        )
-        r.raise_for_status()
-        skill_meta = r.json()
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            return f"Skill '{qualified_name}' not found."
-        return f"Registry error: {e.response.status_code}"
-    except Exception as e:
-        return f"Failed to fetch skill: {e}"
-
-    skill_name = skill_meta.get("name") or skill_meta.get("displayName") or qualified_name
-    skill_desc = (skill_meta.get("description") or "").strip()
-
-    content = None
-    content_url = (
-        skill_meta.get("contentUrl") or skill_meta.get("url") or skill_meta.get("content_url")
-    )
-    if content_url and _is_safe_url(content_url):
-        try:
-            rc = await _get_http_client().get(content_url, timeout=TIMEOUT_FETCH_URL)
-            rc.raise_for_status()
-            content = rc.text
-        except Exception:
-            content = None
-
-    if not content:
-        content = skill_meta.get("content") or skill_meta.get("markdown") or skill_meta.get("text")
-
-    if not content:
-        return "\n".join(
-            [
-                f"Skill: {skill_name} ({qualified_name})",
-                f"Description: {skill_desc}" if skill_desc else "",
-                "Warning: could not fetch skill content.",
-                json.dumps(skill_meta, indent=2),
-            ]
-        )
-
-    token_estimate = len(content) // 4
-    session["skills"][qualified_name] = {
-        "name": skill_name,
-        "content": content,
-        "tokens": token_estimate,
-        "installed_at": datetime.now(UTC).isoformat(),
-    }
-    _save_skills()
-
-    lines = [
-        f"Skill injected: {skill_name} ({qualified_name})",
-        f"Context cost: ~{token_estimate:,} tokens",
-    ]
-    if skill_desc:
-        lines.append(f"Description: {skill_desc}")
-    lines += ["", "--- SKILL CONTENT ---", "", content]
-    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -205,7 +105,6 @@ async def auto(
             "run",
             "setup",
             "shiftback",
-            "skill",
             "test",
         }
     )
@@ -231,8 +130,8 @@ async def auto(
             server_id, server_name, credentials = server_hint, server_hint, {}
     else:
         # Extract registry-friendly keywords from a NL task. Raw NL queries like
-        # "what time is it in Tokyo" only match Smithery (server-side full-text
-        # search), leaving official/McpRegistry servers out. Keyword extraction
+        # "what time is it in Tokyo" match no server name or description.
+        # Keyword extraction
         # gives every registry the right signal to find free official servers first.
         search_query = _search_query_for(task)
         candidates = list(await _state._registry.search(search_query, limit=5))
@@ -315,16 +214,6 @@ async def auto(
         if not tools:
             reg_errors = getattr(_state._registry, "last_registry_errors", {})
             err_detail = "; ".join(f"{n}: {e}" for n, e in reg_errors.items()) if reg_errors else ""
-            from kitsune_mcp.credentials import _smithery_available
-
-            if srv and getattr(srv, "source", None) == "smithery" and not _smithery_available():
-                return _blocked(
-                    what=f"could not fetch tool schema for '{server_id}'",
-                    why="Smithery-hosted server requires SMITHERY_API_KEY"
-                    + (f"; {err_detail}" if err_detail else ""),
-                    fix="auth('SMITHERY_API_KEY', 'sm-...') then retry",
-                    fallback="search() for a free alternative",
-                )
             return _blocked(
                 what=f"could not fetch tool schema for '{server_id}'",
                 why="registry returned no tools" + (f"; {err_detail}" if err_detail else ""),
@@ -413,7 +302,6 @@ async def auto(
                 "401",
                 "403",
                 "invalid token",
-                "smithery_api_key",
             )
         )
         if not is_auth_fail or not candidates:
@@ -1053,7 +941,7 @@ def _infer_args_from_task(tool_schema: dict, task: str) -> dict:
         return {}
 
     # Rule 0b — no required string params: check for optional search-like params.
-    # Many Smithery servers declare all params as optional (required=[]) but
+    # Many servers declare all params as optional (required=[]) but
     # still reject calls without the primary query param. Fill the first
     # SEARCH_PARAM_NAMES match found in the properties.
     if len(string_required) == 0:
@@ -1290,7 +1178,6 @@ async def setup(
         return "\n".join(lines)
 
     # ── Gateway actions ───────────────────────────────────────────────────────
-    from datetime import UTC, datetime
 
     from kitsune_mcp.gateway import (
         _find_mcp_configs,
@@ -1612,12 +1499,6 @@ async def onboard() -> str:
         "PROVIDERS",
     ]
 
-    # Active providers — check auth state explicitly
-    smithery_ok = _smithery_available()
-    lines.append(
-        f"  {'✓' if smithery_ok else '🔑'}  Smithery"
-        f"  {'(SMITHERY_API_KEY set — 3000+ verified servers)' if smithery_ok else '(unconfigured — get a key at smithery.ai/account/api-keys to unlock 3000+ servers)'}"
-    )
     lines.append("  ✓  Official MCP Registry  (modelcontextprotocol.io — no key needed)")
     lines.append("  ✓  npm + PyPI  (community servers, no key needed)")
     lines.append("  ✓  Glama  (community directory, no key needed)")
@@ -1640,14 +1521,6 @@ async def onboard() -> str:
     lines.append("  → If step 2 returns a timestamp, your install works end-to-end.")
     lines.append("")
 
-    # Optional upgrade
-    if not smithery_ok:
-        lines.append("UPGRADE PATH")
-        lines.append("  Get more servers (incl. GitHub, Notion, Linear, Slack, …):")
-        lines.append("    1. Sign up at https://smithery.ai/account/api-keys")
-        lines.append('    2. key("SMITHERY_API_KEY", "sm-...")')
-        lines.append('    3. search("<what you need>")')
-    else:
-        lines.append("All providers active — explore freely with search() / shapeshift().")
+    lines.append("All providers active — explore freely with search() / shapeshift().")
 
     return "\n".join(lines)

@@ -26,7 +26,7 @@ More options: [installation](installation.md).
 ## 2. Find, mount, use, drop
 
 ```python
-search("current time")  # 7 registries, no API key needed
+search("current time")  # 6 registries, no API key needed
 shapeshift("mcp-server-time")  # its tools appear in your client
 get_current_time(timezone="Asia/Tokyo")
 shapeshift()  # tools gone, process stopped

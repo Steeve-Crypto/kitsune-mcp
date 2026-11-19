@@ -89,7 +89,7 @@ call("summarize", arguments={"url": "https://example.com"})
 
 ### Executing a long-tail server — Glama & hosted HTTP (≈ 40 s)
 
-**The pain we're killing:** you need a capability that lives in one of 130,000+
+**The pain we're killing:** you need a capability that lives in one of thousands of
 servers you were never going to add to your config. Native deferral can't help —
 the server isn't configured. Kitsune discovers and runs it on demand.
 
@@ -132,7 +132,7 @@ shapeshift()
 **CAPTION:** *Local npx server and a remote hosted server — same three calls.
 Neither was in your config. Neither needed a restart.*
 
-**TITLE CARD:** *130,000+ servers. Summoned, used, released.*
+**TITLE CARD:** *Thousands of servers. Summoned, used, released.*
 
 ---
 

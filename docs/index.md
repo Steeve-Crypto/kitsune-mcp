@@ -35,7 +35,7 @@ Kitsune makes the restart a tool call, so the agent tests its own fix.
 <div markdown>
 ### Borrow any server
 
-130,000+ servers from 7 registries. Mount one tool, use it, drop it.
+Community servers from 6 registries. Mount one tool, use it, drop it.
 
 [Quickstart](quickstart.md)
 </div>

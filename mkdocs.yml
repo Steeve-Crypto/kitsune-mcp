@@ -1,7 +1,7 @@
 site_name: Kitsune MCP
 site_description: >-
   Let your agent test the MCP server it's building. Hot-reload for MCP servers,
-  plus any of 130,000+ community servers mid-session, caged in Docker.
+  plus community servers from 6 registries mid-session, caged in Docker.
 site_url: https://kaiser-data.github.io/kitsune-mcp/
 repo_url: https://github.com/kaiser-data/kitsune-mcp
 repo_name: kaiser-data/kitsune-mcp

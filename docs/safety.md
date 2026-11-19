@@ -1,6 +1,6 @@
 # Safety model
 
-Reach into 130k community servers only works if unknown code can be **contained**. Consent, sandbox, and pins are product features — not footnotes.
+Reaching into thousands of community servers only works if unknown code can be **contained**. Consent, sandbox, and pins are product features — not footnotes.
 
 **Headline controls**
 

@@ -51,7 +51,7 @@ call("summarize", arguments={"url": "https://example.com"})  # new code, same se
 
 No Docker needed: `connect()` runs your own server as a plain local process, so the loop stays fast.
 
-It also mounts any of 130,000+ servers from 7 registries mid-session. If Docker is installed, community packages run caged.
+It also mounts community servers from 6 registries mid-session. If Docker is installed, community packages run caged.
 
 Try it: [hot-reload tutorial](https://kaiser-data.github.io/kitsune-mcp/hot-reload/) · [`examples/demo-hot-reload/`](examples/demo-hot-reload/)
 
@@ -145,7 +145,7 @@ Default profile: **9 tools**. Standing cost: **~1,774 tokens/turn** on clients t
 | `connect(command, name)` | Start a persistent local server, e.g. the one you're developing |
 | `reload(name)` | Release, restart on fresh code, remount, in one call |
 | `release(name)` | Stop a persistent server |
-| `search(query, registry?)` | Search 7 registries |
+| `search(query, registry?)` | Search 6 registries |
 | `shapeshift(server_id?, tools=[…])` | Mount a server's tools (all or a subset); no argument drops them |
 | `call(tool_name, arguments)` | Call a tool; the server is inferred when mounted |
 | `auth(var_or_server, value?)` | Set an env key or run an OAuth 2.1 browser flow |
